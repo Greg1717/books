@@ -1,0 +1,555 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+# Introduction
+
+This data was created by Francis Galton²¹ in 1885. Galton was a statistician
+who invented the term and concepts of regression and correlation, founded the journal Biometrika²²,
+and was the cousin of Charles Darwin²³.
+
+```{r}
+library(UsingR)
+data(galton)
+library(reshape2)
+head(galton)
+summary(galton)
+long <- melt(galton)
+str(long)
+g <- ggplot(long, aes(x = value, fill = variable))
+g <- g + geom_histogram(colour = "black", binwidth = 1)
+g <- g + facet_grid(. ~ variable)
+g
+```
+
+```{r}
+library(manipulate)
+myHist <- function(mu){
+mse <- mean((galton$child - mu)^2)
+g <- ggplot(galton, aes(x = child)) + geom_histogram(fill = "salmon", colour = "black", binwidth=1)
+g <- g + geom_vline(xintercept = mu, size = 3)
+g <- g + ggtitle(paste("mu = ", mu, ", MSE = ", round(mse, 2), sep = ""))
+g
+}
+manipulate(myHist(mu), mu = slider(62, 74, step = 0.5))
+
+```
+
+
+## Comparing children’s heights and their parent’s heights
+
+```{r}
+ggplot(galton, aes(x = parent, y = child)) + geom_point()
+ggplot(galton, aes(x = parent, y = child)) + geom_jitter()
+```
+The overplotting is clearly hiding some data.
+
+
+## Regression through the origin
+
+We want to find the slope of the line that best fits the data. However, we have to pick a good intercept. Let’s subtract the mean from both the parent and child heights so that their subsequent means are 0. Now let’s find the line that goes through the origin (has intercept 0) by picking the best slope.
+
+```{r}
+# library(dplyr)
+# centering x and y
+y <- galton$child - mean(galton$child)
+x <- galton$parent - mean(galton$parent)
+
+# create dataframe with frequencies using table
+freqData <- as.data.frame(table(x, y))
+names(freqData) <- c("child", "parent", "freq")
+# reformat into numeric
+freqData$child <- as.numeric(as.character(freqData$child))
+freqData$parent <- as.numeric(as.character(freqData$parent))
+
+myPlot <- function(beta) {
+  # g <- ggplot(filter(freqData, freq > 0), aes(x = parent, y = child))
+  g <- ggplot(freqData[freqData$freq > 0,], aes(x = parent, y = child))
+  g <- g + scale_size(range = c(2, 20), guide = "none")
+  g <-
+    g + geom_point(colour = "grey50",
+                   aes(size = freq + 20),
+                   show.legend = FALSE)
+  g <- g + geom_point(aes(colour = freq, size = freq))
+  g <- g + scale_colour_gradient(low = "lightblue", high = "white")
+  g <- g + geom_abline(intercept = 0,
+                       slope = beta,
+                       size = 3)
+  mse <- mean((y - beta * x) ^ 2)
+  g <- g + ggtitle(paste("beta = ", beta, "mse = ", round(mse, 3)))
+  g
+}
+manipulate(myPlot(beta), beta = slider(0.6, 1.2, step = 0.02))
+```
+
+The solution:
+```{r}
+lm(I(child - mean(child))~ I(parent - mean(parent)) - 1, data = galton)
+```
+Note that I shifted the origin back to the means of the original data. The results suggest that for every 1 inch increase in the parents’ height, we estimate a 0.646 inch increase in the child’s height.
+
+
+# Notation
+
+The variance and standard deviation are measures of how spread out our data is.
+The data defined by Xi/s have empirical standard deviation 1. This is called **scaling** the data. We can combine centering and scaling of data as follows to get **normalized** data (has empirical mean zero and empirical standard deviation 1). The process of centering then scaling the data is called **normalizing the data**. Normalized data are centered at 0 and have units equal to standard deviations of the original data. 
+
+
+# Ordinary Least Squares
+
+Ordinary least squares (OLS) is the workhorse of statistics. It gives a way of taking complicated outcomes and explaining behavior (such as trends) using linearity. The simplest application of OLS is fitting a line.
+
+The slope, βˆ1, has the units of Y/X. 
+The intercept, βˆ0, has the units of Y.
+The line passes through the point (X¯,Y¯). If you center your Xs and Ys first, then the line will pass through the origin. Moreover, the slope is the same one you would get if you centered the data and either fit a linear regression or regression through the origin.
+
+Regression through the origin: β0 = 0
+
+Show how lm() calculates the coefficients:
+```{r manual calculation vs lm function}
+y <- galton$child
+x <- galton$parent
+beta1 <- cor(y, x) * sd(y) / sd(x)
+beta0 <- mean(y) - beta1 * mean(x)
+rbind(c(beta0, beta1), coef(lm(y ~ x)))
+```
+Let’s reverse the outcome/predictor relationship.
+```{r}
+beta1 <- cor(y, x) * sd(x) / sd(y)
+beta0 <- mean(x) - beta1 * mean(y)
+rbind(c(beta0, beta1), coef(lm(x ~ y)))
+```
+Now let’s show that regression through the origin yields an equivalent slope if you center the data first
+```{r}
+yc <- y - mean(y)
+xc <- x - mean(x)
+beta1 <- sum(yc * xc) / sum(xc ^ 2)
+c(beta1, coef(lm(y ~ x))[2])
+```
+Now let’s show that normalizing variables results in the slope being the correlation.
+```{r}
+yn <- (y - mean(y))/sd(y)
+xn <- (x - mean(x))/sd(x)
+c(cor(y, x), cor(yn, xn), coef(lm(yn ~ xn))[2])
+```
+
+
+# Regression to the Mean
+
+# Statistical Linear Regression Models
+
+Therefore, shifting your X values by value a changes the intercept, but not the slope. Often a is set to X¯, so that the intercept is interpreted as the expected response at the average X value.
+
+
+## Using regression for prediction
+
+Regression, especially linear regression, often doesn’t produce the best prediction algorithms. However, it produces parsimonious and interpretable models along with the predictions.
+
+```{r}
+library(UsingR)
+data(diamond)
+library(ggplot2)
+g = ggplot(diamond, aes(x = carat, y = price))
+g = g + xlab("Mass (carats)")
+g = g + ylab("Price (SIN $)")
+g = g + geom_point(size = 7, colour = "black", alpha=0.5)
+g = g + geom_point(size = 5, colour = "blue", alpha=0.2)
+g = g + geom_smooth(method = "lm", colour = "black")
+g
+
+fit <- lm(price ~ carat, data = diamond)
+coef(fit)
+```
+We’re not interested in 0 carat diamonds (it’s hard to get a good price for them ;-). Let’s fit the model with a more interpretable intercept by centering our X variable.
+```{r}
+fit2 <- lm(price ~ I(carat - mean(carat)), data = diamond)
+coef(fit2)
+```
+Thus the new intercept, 500.1, is the expected price for the average sized diamond of the data (0.2042 carats). Notice the estimated slope didn’t change at all.
+Now let’s try changing the scale. This is useful since a one carat increase in a diamond is pretty big.
+What about changing units to 1/10th of a carat? We can just do this by just dividing the coefficient by 10, no need to refit the model.
+Thus, we expect a 372.102 (SIN) dollar change in price for every 1/10th of a carat increase in mass of diamond.
+Let’s show via R that this is the same as rescaling our X variable and refitting. To go from 1 carat to 1/10 of a carat units, we need to multiply our data by 10.
+```{r}
+fit3 <- lm(price ~ I(carat * 10), data = diamond)
+coef(fit3)
+```
+Now, let’s predict the price of a diamond. This should be as easy as just evaluating the fitted line at the price we want to:
+```{r}
+newx <- c(0.16, 0.27, 0.34)
+coef(fit)[1] + coef(fit)[2] * newx
+```
+R has a generic function, predict, to put our X values into the model for us. The data has to go into the model as a data frame with the same named X variables.
+```{r}
+predict(fit, newdata = data.frame(carat = newx))
+```
+
+
+
+# Residuals 
+
+# Regression Inference
+
+```{r}
+library(UsingR)
+data(diamond)
+y <- diamond$price
+x <- diamond$carat
+n <- length(y)
+plot(x = x, y = y)
+```
+
+
+## Didactic Example
+
+```{r}
+beta1 <- cor(y, x) * sd(y) / sd(x)       # slope
+beta0 <- mean(y) - beta1 * mean(x)       # intercept
+e <- y - beta0 - beta1 * x               # residuals, y - yhat
+sigma <- sqrt(sum(e^2) / (n-2))          # SD of residuals
+ssx <- sum((x - mean(x))^2)              # SSx
+
+# Now let's calculate the SE for our regression coefficients and the t statistic.
+seBeta0 <- (1/n + mean(x)^2 / ssx) ^ 0.5 * sigma    # SE intercept
+seBeta1 <- sigma / sqrt(ssx)                        # SE slope
+tBeta0 <- beta0 / seBeta0                           # t statistic intercept
+tBeta1 <- beta1 / seBeta1                           # t statistic slope
+```
+
+Recall that P-values are the probability of getting a statistic as or larger than was actually obtained, where the probability is calculated under the null hypothesis. 
+```{r}
+pBeta0 <- 2 * pt(abs(tBeta0), df = n-2, lower.tail = F)
+pBeta1 <- 2 * pt(abs(tBeta1), df = n-2, lower.tail = F)
+coefTable <- rbind(c(beta0, seBeta0, tBeta0, pBeta0), 
+                   c(beta1, seBeta1, tBeta1, pBeta1))
+colnames(coefTable) <- c("Estimate", "Std. Error", "t value", "P(>|t|)")
+rownames(coefTable) <- c("(Intercept)", "x")
+coefTable
+```
+
+## Same with lm()
+```{r}
+fit <- lm(y ~ x)
+summary(fit)
+summary(fit)$coefficients
+```
+
+
+## Getting a confidence interval
+```{r}
+# intercept
+sumCoef <- summary(fit)$coefficients
+sumCoef[1, 1] + c(-1, 1) * qt(0.975, df = fit$df.residual) * sumCoef[1, 2]
+# slope
+sumCoef[2, 1] + c(-1, 1) * qt(0.975, df = fit$df.residual) * sumCoef[2, 2]
+sumCoef["x", "Estimate"]
+sumCoef["(Intercept)", "Estimate"]
+```
+
+## Prediction of outcomes
+```{r}
+library(ggplot2)
+newx <- data.frame(x = seq(min(x), max(x), length = 100))
+p1 <- data.frame(predict(fit, newdata = newx, interval = "confidence"))
+p2 <- data.frame(predict(fit, newdata = newx, interval = "prediction"))
+p1$interval <- "confidence"
+p2$interval <- "prediction"
+p1$x <- newx$x
+p2$x <- newx$x
+dat <- rbind(p1, p2)
+names(dat)[1] <- "y"
+head(dat)
+g <- ggplot(dat, aes(x = x, y = y))
+g <- g + geom_ribbon(aes(ymin = lwr, ymax = upr, fill = interval), alpha = 0.2)
+g <- g + geom_line()
+g <- g + geom_point(data = data.frame(x = x, y = y), aes(x = x, y = y), size = 4)
+g
+```
+
+# Multivariable Regression Analysis
+```{r}
+
+```
+
+## Swirl - Residual Variation
+## Swirl - Introduction to Multivariable Regression
+## Swirl - MultiVar Examples
+## Quiz 2
+
+https://rpubs.com/cwerneck/333939
+
+# Multivariable examples and tricks
+
+# Adjustment
+
+# Residuals, variation, diagnostics
+
+# Multiple variables and model selection
+
+# Generalized Linear Models
+
+# Binary GLMs
+## Logistic Regression
+### StatQuest
+```{r}
+library(ggplot2)
+library(cowplot)
+library(data.table)
+## NOTE: The data used in this demo comes from the UCI machine learning
+## repository.
+## http://archive.ics.uci.edu/ml/index.php
+## Specifically, this is the heart disease data set.
+## http://archive.ics.uci.edu/ml/datasets/Heart+Disease
+ 
+url <- "http://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data"
+
+# data <- read.csv(url, header=FALSE)
+# saveRDS(object = data,file = "heart_disease_cleveland.rds") 
+data <- readRDS("heart_disease_cleveland.rds")
+#####################################
+##
+## Reformat the data so that it is
+## 1) Easy to use (add nice column names)
+## 2) Interpreted correctly by glm()..
+##
+#####################################
+head(data) # you see data, but no column names
+ 
+colnames(data) <- c(
+  "age",
+  "sex",# 0 = female, 1 = male
+  "cp", # chest pain
+  # 1 = typical angina,
+  # 2 = atypical angina,
+  # 3 = non-anginal pain,
+  # 4 = asymptomatic
+  "trestbps", # resting blood pressure (in mm Hg)
+  "chol", # serum cholestoral in mg/dl
+  "fbs",  # fasting blood sugar if less than 120 mg/dl, 1 = TRUE, 0 = FALSE
+  "restecg", # resting electrocardiographic results
+  # 1 = normal
+  # 2 = having ST-T wave abnormality
+  # 3 = showing probable or definite left ventricular hypertrophy
+  "thalach", # maximum heart rate achieved
+  "exang",   # exercise induced angina, 1 = yes, 0 = no
+  "oldpeak", # ST depression induced by exercise relative to rest
+  "slope", # the slope of the peak exercise ST segment
+  # 1 = upsloping
+  # 2 = flat
+  # 3 = downsloping
+  "ca", # number of major vessels (0-3) colored by fluoroscopy
+  "thal", # this is short of thalium heart scan
+  # 3 = normal (no cold spots)
+  # 6 = fixed defect (cold spots during rest and exercise)
+  # 7 = reversible defect (when cold spots only appear during exercise)
+  "hd" # (the predicted attribute) - diagnosis of heart disease
+  # 0 if less than or equal to 50% diameter narrowing
+  # 1 if greater than 50% diameter narrowing
+)
+ 
+head(data) # now we have data and column names
+
+str(data) # this shows that we need to tell R which columns contain factors
+# it also shows us that there are some missing values. There are "?"s
+# in the dataset. These are in the "ca" and "thal" columns...
+
+summary(data)
+
+## First, convert "?"s to NAs...
+data[data == "?"] <- NA
+
+## Now add factors for variables that are factors and clean up the factors
+## that had missing data...
+data[data$sex == 0,]$sex <- "F"
+data[data$sex == 1,]$sex <- "M"
+data$sex <- as.factor(data$sex)
+data$cp <- as.factor(data$cp)
+data$fbs <- as.factor(data$fbs)
+data$restecg <- as.factor(data$restecg)
+data$exang <- as.factor(data$exang)
+data$slope <- as.factor(data$slope)
+ 
+data$ca <- as.integer(data$ca) # since this column had "?"s in it
+# R thinks that the levels for the factor are strings, but
+# we know they are integers, so first convert the strings to integers...
+data$ca <- as.factor(data$ca)  # ...then convert the integers to factor levels
+ 
+data$thal <- as.integer(data$thal) # "thal" also had "?"s in it.
+data$thal <- as.factor(data$thal)
+ 
+## This next line replaces 0 and 1 with "Healthy" and "Unhealthy"
+data$hd <- ifelse(test=data$hd == 0, yes="Healthy", no="Unhealthy")
+data$hd <- as.factor(data$hd) # Now convert to a factor
+ 
+str(data) ## this shows that the correct columns are factors
+ 
+## Now determine how many rows have "NA" (aka "Missing data"). If it's just
+## a few, we can remove them from the dataset, otherwise we should consider
+## imputing the values with a Random Forest or some other imputation method.
+nrow(data[is.na(data$ca) | is.na(data$thal),])
+data[is.na(data$ca) | is.na(data$thal),]
+## so 6 of the 303 rows of data have missing values. This isn't a large
+## percentage (2%), so we can just remove them from the dataset
+## NOTE: This is different from when we did machine learning with
+## Random Forests. When we did that, we imputed values.
+nrow(data)
+data <- data[!(is.na(data$ca) | is.na(data$thal)),]
+nrow(data)
+ 
+#####################################
+##
+## Now we can do some quality control by making sure all of the factor
+## levels are represented by people with and without heart disease (hd)
+##
+## NOTE: We also want to exclude variables that only have 1 or 2 samples in
+## a category since +/- one or two samples can have a large effect on the
+## odds/log(odds)
+##
+##
+#####################################
+xtabs(~ hd + sex, data=data)
+xtabs(~ hd + cp, data=data)
+xtabs(~ hd + fbs, data=data)
+xtabs(~ hd + restecg, data=data)
+xtabs(~ hd + exang, data=data)
+xtabs(~ hd + slope, data=data)
+xtabs(~ hd + ca, data=data)
+xtabs(~ hd + thal, data=data)
+ 
+#####################################
+## Now we are ready for some logistic regression. First we'll create a very
+## simple model that uses sex to predict heart disease
+#####################################
+ 
+## let's start super simple and see if sex (female/male) is a good
+## predictor...
+## First, let's just look at the raw data...
+xtabs(~ hd + sex, data=data)
+#           sex
+# hd         F   M
+# Healthy    71  89
+# Unhealthy  25 112
+## Most of the females are healthy and most of the males are unhealthy.
+## Being female is likely to decrease the odds in being unhealthy.
+##    In other words, if a sample is female, the odds are against it that it
+##    will be unhealthy
+## Being male is likely to increase the odds in being unhealthy...
+##    In other words, if a sample is male, the odds are for it being unhealthy
+ 
+###########
+##
+## Now do the actual logistic regression
+##
+###########
+ 
+logistic <- glm(hd ~ sex, data = data, family = "binomial")
+summary(logistic)
+## (Intercept)  -1.0438     0.2326  -4.488 7.18e-06 ***
+##   sexM        1.2737     0.2725   4.674 2.95e-06 ***
+ 
+## Let's start by going through the first coefficient...
+## (Intercept)  -1.0438     0.2326  -4.488 7.18e-06 ***
+##
+## The intercept is the log(odds) a female will be unhealthy. This is because
+## female is the first factor in "sex" (the factors are ordered,
+## alphabetically by default,"female", "male")
+
+female.log.odds <- log(25 / 71)
+female.log.odds
+log(exp(3))
+e_natLog <- exp(1)
+exp(2)
+e_natLog^2
+exp(3)
+e_natLog^3
+log(e_natLog^3)
+
+summary(logistic)
+## Now let's look at the second coefficient...
+##   sexM        1.2737     0.2725   4.674 2.95e-06 ***
+##
+## sexM is the log(odds ratio) that tells us that if a sample has sex=M, the
+## odds of being unhealthy are, on a log scale, 1.27 times greater than if
+## a sample has sex=F.
+
+xtabs(~ hd + sex, data=data)
+male.log.odds.ratio <- log((112 / 89) / (25/71))
+male.log.odds.ratio
+ 
+## Now calculate the overall "Pseudo R-squared" and its p-value
+ 
+## NOTE: Since we are doing logistic regression...
+## Null devaince = 2*(0 - LogLikelihood(null model))
+##               = -2*LogLikihood(null model)
+## Residual deviacne = 2*(0 - LogLikelihood(proposed model))
+##                   = -2*LogLikelihood(proposed model)
+ll.null <- logistic$null.deviance/-2
+ll.proposed <- logistic$deviance/-2
+ 
+## McFadden's Pseudo R^2 = [ LL(Null) - LL(Proposed) ] / LL(Null)
+(ll.null - ll.proposed) / ll.null
+ 
+## chi-square value = 2*(LL(Proposed) - LL(Null))
+## p-value = 1 - pchisq(chi-square value, df = 2-1)
+1 - pchisq(2*(ll.proposed - ll.null), df=1)
+1 - pchisq((logistic$null.deviance - logistic$deviance), df=1)
+ 
+## Lastly, let's  see what this logistic regression predicts, given
+## that a patient is either female or male (and no other data about them).
+predicted.data <- data.frame(probability.of.hd = logistic$fitted.values,
+                             sex = data$sex)
+ 
+## We can plot the data...
+library(ggplot2)
+ggplot(data=predicted.data, aes(x=sex, y=probability.of.hd)) +
+  geom_point(aes(color=sex), size=5) +
+  xlab("Sex") +
+  ylab("Predicted probability of getting heart disease")
+ 
+## Since there are only two probabilities (one for females and one for males),
+## we can use a table to summarize the predicted probabilities.
+xtabs(~ probability.of.hd + sex, data=predicted.data)
+ 
+#####################################
+##
+## Now we will use all of the data available to predict heart disease
+##
+#####################################
+ 
+logistic <- glm(hd ~ ., data=data, family="binomial")
+summary(logistic)
+ 
+## Now calculate the overall "Pseudo R-squared" and its p-value
+ll.null <- logistic$null.deviance/-2
+ll.proposed <- logistic$deviance/-2
+ 
+## McFadden's Pseudo R^2 = [ LL(Null) - LL(Proposed) ] / LL(Null)
+(ll.null - ll.proposed) / ll.null
+ 
+## The p-value for the R^2
+r_sq <- 1 - pchisq(2*(ll.proposed - ll.null), df=(length(logistic$coefficients)-1))
+r_sq 
+
+## now we can plot the data
+predicted.data <- data.frame(
+  probability.of.hd=logistic$fitted.values,
+  hd=data$hd)
+ 
+predicted.data <- predicted.data[
+  order(predicted.data$probability.of.hd, decreasing=FALSE),]
+
+predicted.data$rank <- 1:nrow(predicted.data)
+ 
+## Lastly, we can plot the predicted probabilities for each sample having
+## heart disease and color by whether or not they actually had heart disease
+ggplot(data=predicted.data, aes(x=rank, y=probability.of.hd)) +
+  geom_point(aes(color=hd), alpha=1, shape=4, stroke=2) +
+  xlab("Index") +
+  ylab("Predicted probability of getting heart disease")
+ 
+ggsave("heart_disease_probabilities.pdf")
+```
+
+# Count data

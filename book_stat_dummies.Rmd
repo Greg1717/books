@@ -1,0 +1,735 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Part 3: Drawing Conclusions from Data
+
+## Chapter 9: The Confidence Game: Estimation
+
+### Standard Error
+In general, a sampling distribution is the distribution of all possible values of a statistic 
+for a given sample size.
+
+The **standard deviation of a sampling distribution** is a pretty hot item. 
+It has a special name: **standard error**. 
+
+For the **sampling distribution of the mean**, the standard deviation is called the **standard error of the mean**.
+
+### An EXTREMELY Important Idea: The Central Limit Theorem
+
+According to the central limit theorem:
+
+- The sampling distribution of the mean is approximately a normal distribution 
+if the sample size is large enough. Large enough means about 30 or more.
+- The mean of the sampling distribution of the mean is the same as the 
+population mean.
+- The standard deviation of the sampling distribution of the mean (also known 
+as the standard error of the mean) is equal to the population standard 
+deviation divided by the square root of the sample size.
+
+
+Imagine a huge population that consists of just three scores — 1, 2, and 3, and 
+each one is equally likely to appear in a sample. That kind of population is defi-
+nitely not a normal distribution.
+Imagine also that you can randomly select a sample of three scores from this 
+population. Table 9-1 shows all possible samples and their means.
+
+```{r}
+values <- c(1,2,3)
+probabilities <- c(1/3,1/3,1/3)
+smpl.means <- NULL
+
+for(i in 1:6000) {
+  smpl <-
+    sample(
+      x = values,
+      prob = probabilities,
+      size = 3,
+      replace = TRUE
+    )
+  smpl.means <- append(smpl.means, mean(smpl))
+}
+
+ggplot(NULL, aes(x = smpl.means)) +
+  geom_histogram()
+
+# use these values for the X-axis
+m.values <-round(unique(smpl.means),2)
+
+ggplot(NULL, aes(x = smpl.means)) +
+  geom_histogram() +
+  scale_x_continuous(breaks = m.values, label = m.values) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = expression(bar(X)), y = expression(frequency(bar(X))))
+
+```
+
+### Predictions of the central limit theorem
+Calculate the expected value:
+```{r}
+E.values<-sum(values*probabilities)
+E.values
+```
+To find the variance of X, subtract E(X) from each X, square each deviation, multiply each squared deviation by the probability of X, and add the products.
+```{r}
+var.values <- sum((values-E.values)^2*probabilities)
+var.values
+```
+The standard deviation is the square root of the variance:
+```{r}
+sd.values<-sqrt(var.values)
+
+# STANDARD ERROR
+sd.values/sqrt(3)
+```
+
+```{r}
+mean(smpl.means)
+# SD of the sample means = STANDARD ERROR
+sd(smpl.means)
+```
+
+
+## Chapter 10: One-Sample Hypothesis Testing
+
+
+### Z-testing in R (population variance is known)
+IQ test:  
+H0: mean IQ <= 100  
+H1: mean IQ >  100  
+
+```{r}
+IQ_data <- c(100, 101, 104, 109, 125, 116, 105, 108, 110)
+mean_IQdata <- mean(IQ_data)
+# IQ is known to have a SD of 15
+popsd <- 15
+# test if mean of sample is statistically different from the 
+# known IQ-mean of 100
+mu <- 100
+# Assume that alpha = 0.05
+?pnorm
+```
+
+Because you use the z-score in the hypothesis test, the z-score here is called 
+the **test statistic**. 
+
+```{r Z score as test statistic}
+z.score <- round((mean(IQ_data) - mu)/
+                     (popsd / sqrt(length(IQ_data))), 3)
+z.score
+```
+
+
+```{r ztest function}
+z.test <- function(x, mu, popsd) {
+    one.tail <- NULL
+    z.score <- round((mean(x) - mu)/(popsd/sqrt(length(x))), 3)
+    one.tail.p <- round(pnorm(abs(z.score), lower.tail = F), 3)
+    cat(" z =", z.score, "\n",
+        "one-tailed probability =", one.tail.p, "\n",
+        "two-tailed probability =", 2*one.tail.p)
+}
+
+z.test(IQ_data, mu, popsd)
+```
+
+Same with tigerstats:
+```{r}
+tigerstats::pnormGC(
+    bound = z.score,
+    region = "above",
+    mean = 0,
+    sd = 1,
+    graph = T
+)
+```
+
+
+You set up a critical value, a decision criterion. 
+The **critical value** is determined by alpha. 
+
+```{r critical value as z-score}
+qnorm(
+    p = 0.95,
+    lower.tail = T
+)
+```
+
+```{r}
+tigerstats::qnormGC(
+  area = 0.95,
+  region = "below",
+  mean = 0,
+  sd = 1,
+  graph = T
+)
+```
+
+
+```{r critical value as IQ points}
+qnorm(
+    p = 0.95,
+    mean = 100,
+    sd = popsd/sqrt(length(IQ_data)),
+    lower.tail = T
+)
+```
+
+With pnorm() only:
+```{r}
+pnorm(q = z.score,
+      lower.tail = FALSE)
+```
+P-value is very low, this also suggests that H0 can be rejected.
+
+Same using means and standard error instead of z-score:
+```{r}
+pnorm(
+    q = mean_IQdata,
+    mean = 100,
+    sd = popsd/sqrt(length(IQ_data)),
+    lower.tail = FALSE
+)
+```
+
+Show graphically using tigerstats:
+```{r}
+library(tigerstats)
+?tigerstats::pnormGC
+pnormGC(
+    bound = z.score,
+    region = "above",
+    mean = 0,
+    sd = 1,
+    graph = T
+)
+```
+
+Tigerstats again, but using means instead of z-scores:
+```{r}
+pnormGC(
+    bound = mean_IQdata,
+    region = "above",
+    mean = 100,
+    sd = 15/sqrt(length(IQ_data)),
+    graph = T
+)
+```
+
+The **critical value** - the value of z that cuts off 5 percent of the area in a standard normal distribution - is 1.645:
+
+```{r}
+qnorm(p = 0.95)
+```
+
+```{r}
+tigerstats::qnormGC(area = 0.95, graph = TRUE)
+```
+
+In case of a two-tailed test the 5% is divided evenly between the left tail and the right tail.  
+
+```{r}
+qnorm(p = 0.975)
+```
+
+```{r}
+qnormGC(area = 0.975, graph = TRUE)
+```
+
+
+### t for One
+
+You usually have small samples.
+Usually you do NOT know the population parameters.
+Use 't' as a **test statistic**.
+
+### t-Testing in R
+```{r}
+FarKlempt_data <- c(3,6,9,9,4,10,6,4,12)
+# ?t.test
+mean(FarKlempt_data)
+```
+
+```{r}
+sd(FarKlempt_data)
+```
+
+Test if sample mean is greater than 4:
+```{r}
+t.test(FarKlempt_data,
+       mu = 4,                      # H0 hypothesis
+       alternative = "greater")
+```
+Low p-value indicates that H0 can be rejected.
+
+Manual t-value calculation against an assumed (H0) mean of 4:
+```{r}
+mean_H0 <- 4
+(mean(FarKlempt_data) - mean_H0) / 
+  (sd(FarKlempt_data) / 
+     sqrt(length(FarKlempt_data)))
+
+```
+
+P-value is calculated as follows:
+```{r}
+?pt
+pt(q = 2.8823,
+   df = length(FarKlempt_data)-1,
+   lower.tail = F)
+```
+
+
+### Working with t-Distributions
+```{r}
+tValues <- seq(-4, 4, 1)
+round(dt(tValues, 12), 2)
+```
+```{r}
+round(pt(tValues, 12), 2)
+```
+```{r}
+quartiles <- c(0, 0.25, 0.5, 0.75, 1)
+qt(p = quartiles, df = 12)
+```
+```{r}
+round(rt(8, 12), 2)
+```
+
+
+### Visualizing t-Distributions
+#### Plotting t in base R graphics
+
+Let's visualize df=3, df=10 and a standard normal distribution:
+```{r}
+tValues <- seq(-4, 4, 0.1)
+plot(
+  x = tValues,
+  y = dt(tValues, 3),   # density function with df=3
+  type = "l",
+  lty = "dotted",
+  ylim = c(0, 0.4),
+  xlab = "t",
+  ylab = "f(t)"
+)
+lines(tValues, 
+      dt(tValues, 10),
+      lty = "dashed")
+lines(tValues, 
+      dnorm(tValues))
+legend(
+  "topright",
+  title = "df",
+  legend = c(expression(infinity), "10", "3"),
+  lty = c("solid", "dashed", "dotted"),
+  bty = "n"
+)
+```
+
+t.test in Help:
+```{r}
+require(graphics)
+
+t.test(1:10, y = c(7:20))      # P = .00001855
+t.test(1:10, y = c(7:20, 200)) # P = .1245    -- NOT significant anymore
+
+## Classical example: Student's sleep data
+plot(extra ~ group, data = sleep)
+## Traditional interface
+with(sleep, t.test(extra[group == 1], extra[group == 2]))
+
+## Formula interface
+t.test(extra ~ group, data = sleep)
+
+## Formula interface to one-sample test
+t.test(extra ~ 1, data = sleep)
+
+## Formula interface to paired test
+## The sleep data are actually paired, so could have been in wide format:
+sleep2 <- reshape(sleep, direction = "wide", 
+                  idvar = "ID", timevar = "group")
+t.test(Pair(extra.1, extra.2) ~ 1, data = sleep2)
+```
+
+
+### Testing a Variance
+
+The family of distributions for the test is called **chi-square**. Members of this family can be **skewed** and none of them can take a value less than zero. 
+```{r}
+library(EnvStats)
+FarKlempt.data2 <- c(12.43, 11.71, 14.41, 11.05, 9.53,
+                     11.66, 9.33, 11.71, 14.35, 13.81)
+var(FarKlempt.data2)
+
+varTest(
+  FarKlempt.data2,
+  alternative = "greater",
+  conf.level
+  = 0.95,
+  sigma.squared = 2.25
+)
+```
+The p-value is greater than .05. Therefore, you cannot reject the null 
+hypothesis. How high would chi-square (with df=9) have to be in order to reject? 
+```{r}
+qchisq(.05,df=9,lower.tail = FALSE)
+```
+The observed value missed that critical value by quite a bit.
+
+### Visualizing Chi-Square Distributions
+#### Plotting chi-square in base R graphics
+```{r}
+chi.values <- seq(0,25,.1)
+
+plot(
+  x = chi.values,
+  y = dchisq(chi.values, df = 4),
+  type = "l",
+  xlab = expression(chi ^ 2),
+  ylab = ""
+)
+mtext(side = 2,
+      text = expression(f(chi ^ 2)),
+      line = 2.5)
+lines(x = chi.values, y = dchisq(chi.values, df = 10))
+text(x = 6, y = .15, label = "df=4")
+text(x = 16, y = .07, label = "df=10")
+```
+
+
+
+***
+## Chapter 11: Two-Sample Hypothesis Testing
+
+### Z-testing for two samples in R
+
+```{r}
+sample1 <- c(100, 118, 97, 92, 118, 125, 136, 95, 111)
+sample2 <- c(91, 109, 83, 88, 115, 108, 127, 102, 86)
+mean(sample1)
+mean(sample2)
+popSD <- 15
+# calc SE
+stdError <- sqrt((popSD^2/length(sample1)) + 
+                   popSD^2/length(sample2))
+# calc Z-score
+zScore <- round((mean(sample1) - mean(sample2)) / 
+                  stdError)
+# Calc one-tailed probability
+oneTailProb <- round(pnorm(abs(zScore), lower.tail = F), 3)
+oneTailProb
+```
+
+### t-Testing in R
+
+```{r}
+machine1 <-
+  c(24.58,
+    22.09,
+    23.70,
+    18.89,
+    22.02,
+    28.71,
+    24.44,
+    20.91,
+    23.83,
+    20.83)
+machine2 <-
+  c(21.61,
+    19.06,
+    20.72,
+    15.77, 
+    19, 
+    25.88, 
+    21.48, 
+    17.85, 
+    20.86, 
+    17.77)
+
+?t.test
+
+t.test(
+  machine1,
+  machine2,
+  var.equal = TRUE,
+  alternative = "two.sided",
+  mu = 0
+)
+```
+The t-value and the low p-value indicate that you can reject the null hypothesis. 
+Machine 2 is significantly faster than Machine 1.
+
+#### Working with a data frame and a formula
+```{r}
+prod.time <- c(machine1, machine2)
+machine <- c("machine1", "machine2")
+machine <- rep(machine, times = c(10, 10))
+FarKlempt.frame <- data.frame(machine, prod.time)
+
+head(FarKlempt.frame)
+
+with (
+  FarKlempt.frame,
+  t.test(
+    prod.time ~ machine,
+    var.equal = TRUE,
+    alternative = "two.sided",
+    mu = 0
+  )
+)
+```
+
+### Visualizing the results
+
+```{r}
+with (
+  FarKlempt.frame,
+  boxplot(prod.time ~ machine, 
+          xlab = "Machine", 
+          ylab = "Production Time (minutes)")
+)
+```
+
+
+
+```{r}
+ggplot(FarKlempt.frame, aes(x = machine, y = prod.time)) +
+  stat_boxplot(geom = "errorbar", width = .5) +
+  geom_boxplot()
+```
+
+
+### Paired Sample t-testing in R
+```{r}
+before <-c(198,201,210,185,204,156,167,197,220,186)
+after <- c(194,203,200,183,200,153,166,197,215,184)
+mean(before)
+mean(after)
+t.test(before,after,alternative = "greater",paired=TRUE)
+```
+Because of the very low p-value, you reject the null hypothesis.
+
+
+### Testing Two Variances
+
+Suppose FarKlempt Robotics produces 10 parts with Machine 1 and finds a sample 
+variance of .81 square inches. It produces 15 parts with Machine 2 and finds a 
+sample variance of .64 square inches. Can the company reject H0?
+
+```{r}
+machine1 <-
+  c(24.58,
+    22.09,
+    23.70,
+    18.89,
+    22.02,
+    28.71,
+    24.44,
+    20.91,
+    23.83,
+    20.83)
+machine2 <-
+  c(21.61,
+    19.06,
+    20.72,
+    15.77, 
+    19, 
+    25.88, 
+    21.48, 
+    17.85, 
+    20.86, 
+    17.77)
+
+var.test(machine1,machine2, ratio=1, alternative="two.sided")
+```
+The low F-ratio and high p-value indicate that you cannot reject the null hypoth-
+esis. 
+
+
+### Working with F-Distributions
+That critical value I refer to earlier for a two-tailed F-test with 9 and 14 degrees 
+of freedom is:
+```{r}
+qf(.025,9,14,lower.tail = FALSE)
+```
+It’s a two-tailed test at α = .05, so .025 is in each tail.
+
+
+***
+## Chapter 12 Testing More than Two Samples
+
+### Anova in R
+
+```{r}
+method1.scores <- c(95,91,89,90,99,88,96,98,95)
+method2.scores <- c(83,89,85,89,81,89,90,82,84,80)
+method3.scores <- c(68,75,79,74,75,81,73,77)
+var(method1.scores)
+var(method2.scores)
+var(method3.scores)
+
+Score <- c(method1.scores, method2.scores, method3.scores)
+
+Method <- rep(c("method1", "method2", "method3"),
+              times = c(
+                length(method1.scores),
+                length(method2.scores),
+                length(method3.scores)
+              ))
+
+Training.frame <- data.frame(Method,Score)
+
+analysis <- aov(Score ~ Method, 
+                data = Training.frame)
+
+summary(analysis)
+```
+The first column consists of Method and Residuals, which map onto Between and 
+Within from the preceding section. A residual, in this context, is a score’s deviation 
+from its group mean. (I have more to say about residuals in Chapter 14.) The next 
+columns provide degrees of freedom, SS, MS, F, and p.
+The high value of F and the tiny value of p (listed here as Pr(>F)) tell you to reject 
+the null hypothesis. The significance codes tell you that F is so high that you can 
+reject the null hypothesis even if α is .0001.
+
+#### Visualizing the Results
+```{r}
+ggplot(Training.frame, aes(x=Method, y=Score))+
+ stat_boxplot(geom="errorbar", width =.5) +
+ geom_boxplot()
+```
+
+
+### After the ANOVA
+
+The analysis ANOVA enables you to decide whether or not to reject H0. After you 
+decide to reject, then what? All you can say is that somewhere within the set of 
+means, something is different from something else. The analysis doesn’t specify 
+what those “somethings” are.
+
+#### Planned Comparisons
+In order to get more specific, you have to do some further tests. Not only that, you 
+have to plan those tests in advance of carrying out the ANOVA.
+These post-ANOVA tests are called planned comparisons. Some statisticians refer to 
+them as a priori tests or contrasts.
+
+#### Contrasts in R
+The objective here is to create a table of the ANOVA that shows the contrasts par-
+titioning the SSB and will show the associated F-ratios and p-values. To set up for the contrasts, you first create a matrix of the coefficients in the set 
+of orthogonal contrasts:
+
+```{r}
+# convert var to factor
+Training.frame$Method <- as.factor(Training.frame$Method)
+
+contrasts(Training.frame$Method) <- matrix(data = c(0,1,-1,2,-1,-1), 
+                                           nrow = 3, 
+                                           ncol = 2)
+# On the left, the term inside the parentheses specifies what to contrast — the levels of the independent variable Method in the Training.frame. On the right, the matrix() function creates a matrix with the coefficients in the columns
+contrasts(Training.frame$Method)
+```
+
+Next, you run the analysis of variance, but this time with a contrasts argument:
+```{r}
+Anova.w.Contrasts <- aov(Score ~ Method,
+                         data = Training.frame,
+                         contrasts = contrasts(Training.frame$Method))
+
+summary(Anova.w.Contrasts, 
+        split = list(Method = list("2 vs 3" = 1, "1 vs 2 & 3" = 2)))
+
+```
+
+#### Unplanned Comparisons
+
+
+
+## Chapter 14 Regression: Linear, Multiple and GLM
+
+### Linear Regression in R
+```{r}
+Aptitude <- c(45, 81, 65, 87, 68, 91, 77, 61, 55, 66, 82, 93,
+              76, 83, 61, 74)
+Performance <- c(56, 74, 56, 81, 75, 84, 68, 52, 57, 82, 73, 90,
+                 67, 79, 70, 66)
+plot(Aptitude, Performance)
+?plot
+FarMisht.frame <- data.frame(Aptitude, Performance)
+FM.reg <- lm(Performance ~ Aptitude, data = FarMisht.frame)
+summary(FM.reg)
+plot(FM.reg)
+coefficients(FM.reg)
+confint(FM.reg)
+```
+
+### Making predictions
+```{r}
+predict(FM.reg, data.frame(Aptitude = c(85, 62)))
+```
+
+### Visualizing the scatter plot and regression line
+```{r}
+ggplot(FarMisht.frame, aes(x = Aptitude, y = Performance)) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+
+### Plotting the residuals
+```{r}
+ggplot(FM.reg, aes(x = fitted(FM.reg), y = residuals(FM.reg))) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed")
+```
+
+### Multiple regression in R
+```{r}
+Personality <- c(9, 15, 11, 15, 14, 19, 12, 10, 9, 14, 15, 14,
+                 16, 18, 15, 12)
+FarMisht.frame["Personality"] <- Personality
+FM.multreg <- lm(Performance ~ Aptitude + Personality,
+                 data = FarMisht.frame)
+summary(FM.multreg)
+
+```
+The high F-value and low p-value indicate that the regression plane is an excellent fit for the scatter plot.
+
+### Making predictions
+```{r}
+predict(FM.multreg, data.frame(Aptitude = c(85, 62),
+                               Personality = c(14, 17)))
+```
+
+### Visualizing the 3D scatter plot and regression plane
+```{r}
+library(scatterplot3d)
+with (FarMisht.frame,
+      (
+        splot <- scatterplot3d(
+          Performance ~ Aptitude +
+            Personality,
+          type = "h",
+          pch = 19
+        )
+      ))
+
+splot <- scatterplot3d(
+          Performance ~ Aptitude +
+            Personality,
+          type = "h",
+          pch = 19
+        )
+splot$plane3d(FM.multreg,lty="dashed")
+```
+
+
+
+
+
+
+
+
+
+
