@@ -190,6 +190,110 @@ predict(fit, newdata = data.frame(carat = newx))
 
 # Residuals 
 
+Residuals represent variation left unexplained by our model. We emphasize the difference between residuals and errors. The errors are the unobservable true deviations from the known coefficients, while residuals are the observable deviations from the estimated coefficients. In a sense, the residuals are estimates of the errors.
+
+The residual is defined as the difference the between the observed and predicted outcome.
+
+The residuals are exactly the vertical distance between the observed data point and the associated point on the regression line.
+
+
+## Properties of the residuals
+
+Expected value is 0.
+Residuals are useful for investigating poor model fit. Residual plots highlight poor model fit.
+
+**Residuals can be thought of as the outcome (Y) with the linear association of the predictor (X) removed.**
+
+Finally, we should note the different sorts of variation one encounters in regression. There’s the **total variability** in our response, usually called **total variation**. 
+
+One then differentiates **residual variation** (variation after removing the predictor) from **systematic variation** (variation explained by the regression model). 
+
+These two kinds of variation add up to the **total variation**.
+
+The code below shows how to obtain the residuals.
+```{r}
+library(UsingR)
+data(diamond)
+y <- diamond$price
+x <- diamond$carat
+n <- length(y)
+fit <- lm(y ~ x)
+## The easiest way to get the residuals
+e <- resid(fit)
+## Obtain the residuals manually, get the predicted Ys first
+yhat <- predict(fit)
+## The residuals are y - yhat. Let's check by comparing this
+## with R's build in resid function
+max(abs(e - (y - yhat)))
+## Let's do it again hard coding the calculation of Yhat
+max(abs(e - (y - coef(fit)[1] - coef(fit)[2] * x)))
+```
+
+A useful plot is the **residuals versus the X values**. This allows us to zoom in on instances of poor model fit. Whenever we look at a residual plot, we are searching for systematic patterns of any sort. Here’s the plot for diamond data.
+
+```{r}
+plot(x, resid(fit))
+abline(h = 0)
+```
+We may use our residual variation to estimate population error variation.  
+Finding **residual variance estimates**:
+```{r}
+y <- diamond$price
+x <- diamond$carat
+n <- length(y)
+fit <- lm(y ~ x)
+summary(fit)
+## the estimate from lm
+summary(fit)$sigma
+## directly calculating from the residuals
+sqrt(sum(resid(fit) ^ 2) / (n - 2))
+```
+
+The **regression variability** is the variability that is explained by adding the predictor.  The **residual variability** is what’s leftover around the regression line.  
+We can think of regression as explaining away variability.  
+```{r}
+e = c(resid(lm(price ~ 1, data = diamond)),            # total variation
+      resid(lm(price ~ carat, data = diamond)))        # residual variation
+fit = factor(c(rep("Itc", nrow(diamond)),
+               rep("Itc, slope", nrow(diamond))))
+g = ggplot(data.frame(e = e, fit = fit), aes(y = e, x = fit, fill = fit))
+g = g + geom_dotplot(
+  binaxis = "y",
+  size = 2,
+  stackdir = "center",
+  binwidth = 20
+)
+g = g + xlab("Fitting approach")
+g = g + ylab("Residual price")
+g
+```
+
+```{r}
+sd(resid(lm(price ~ 1, data = diamond)))            # total variation
+sd(resid(lm(price ~ carat, data = diamond)))
+
+fitno <- sd(resid(lm(price ~ 1, data = diamond)))            # total variation
+summary(fitno)
+
+fit <- lm(price ~ carat, data = diamond)
+summary(fit)
+```
+
+
+## R squared
+R squared is the percentage of the total variability that is explained by the linear relationship with the predictor.
+
+R^2 is the percentage of variation explained by the regression model.
+0 ≤ R^2 ≤ 1
+R^2 is the sample correlation squared.
+R^2 can be a misleading summary of model fit.  Anscombe’s residuals (named after their inventor) are a famous example of how R squared doesn’t tell the whole story about model fit. In this example, four data sets have equivalent R squared values and beta values, but dramatically different model fits. 
+```{r}
+data("anscombe")
+example("anscombe")
+plot(x = x2, y = y2)
+```
+
+
 # Regression Inference
 
 ```{r}
@@ -281,6 +385,61 @@ g
 https://rpubs.com/cwerneck/333939
 
 # Multivariable examples and tricks
+```{r}
+require(datasets); data(swiss)
+require(GGally)
+require(ggplot2)
+
+# Function to return points and geom_smooth
+# allow for the method to be changed
+my_fn <- function(data, mapping, method="loess", ...){
+      p <- ggplot(data = data, mapping = mapping) + 
+      geom_point() + 
+      geom_smooth(method=method, ...)
+      p
+    }
+
+# Default loess curve    
+ggpairs(swiss, lower = list(continuous = wrap(my_fn, method="loess")))
+ggpairs(swiss, lower = list(continuous = wrap(my_fn, method="lm")))
+
+# my_fn <- function(data, mapping, pts=list(), smt=list(), ...){
+#               ggplot(data = data, mapping = mapping, ...) + 
+#                          do.call(geom_point, pts) +
+#                          do.call(geom_smooth, smt) 
+#                  }
+# 
+# # Plot 
+# ggpairs(swiss[1:4], 
+#         lower = list(continuous = 
+#                        wrap(my_fn,
+#                             pts=list(size=2, colour="red"), 
+#                             smt=list(method="lm", se=F, size=1, colour="blue"))))
+```
+
+```{r}
+summary(lm(Fertility ~ . , data = swiss))
+```
+Our model estimates an expected 0.17 decrease in standardized fertility for every 1% increase in percentage of males involved in agriculture, holding the remaining variables constant.
+Interestingly, the **unadjusted** estimate is:
+```{r}
+summary(lm(Fertility ~ Agriculture, data = swiss))$coefficients
+```
+Notice that the sign of the slope estimate reversed! Relationship between X and Y may change if we account for Z.
+
+## Simulation study
+```{r}
+n  <- 100
+x2 <- 1:n
+x1 <- 0.01 * x2 + runif(n, -.1, .1)    # x1 depends on x2 + some random noise
+y  <- -x1 +  x2 + rnorm(n, sd = .01)
+x2
+x1
+y
+summary(lm(y ~ x1))$coef
+summary(lm(y ~ x1 + x2))$coef
+```
+Our unadjusted model is picking up the effect X2 as it’s represented in X1.
 
 # Adjustment
 
