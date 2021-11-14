@@ -377,11 +377,7 @@ g
 
 ```
 
-## Swirl - Residual Variation
-## Swirl - Introduction to Multivariable Regression
-## Swirl - MultiVar Examples
 ## Quiz 2
-
 https://rpubs.com/cwerneck/333939
 
 
@@ -919,8 +915,243 @@ impact of variables on associations.
   
 # Residuals, variation, diagnostics
 
-```{r}
+## The linear model
 
+```{r, fig.height = 5, fig.width = 5}
+data(swiss)
+par(mfrow = c(2, 2))
+fit <- lm(Fertility ~ . , data = swiss)
+summary(fit)
+plot(fit)
+dev.off()
+```
+
+## Influential, high leverage and outlying points
+```{r, fig.height = 5, fig.width=5, echo = FALSE, results='hide'}
+n <- 100
+x <- rnorm(n)
+x
+plot(x)
+hist(x)
+y <- x + rnorm(n, sd = .3)
+plot(y)
+
+plot(
+  c(-3, 6),
+  c(-3, 6),
+  type = "n",
+  frame = FALSE,
+  xlab = "X",
+  ylab = "Y"
+)
+
+abline(lm(y ~ x), lwd = 2)
+
+points(
+  x,
+  y,
+  cex = 2,
+  bg = "lightblue",
+  col = "black",
+  pch = 21
+)
+
+points(
+  0,
+  0,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+
+points(
+  0,
+  5,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+
+points(
+  5,
+  5,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+
+points(
+  5,
+  0,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+```
+
+
+## Summary of the plot
+Calling a point an outlier is vague. 
+
+* Outliers can be the result of spurious or real processes.
+* Outliers can have varying degrees of influence.
+* Outliers can conform to the regression relationship (i.e being marginally outlying in X or Y, but not outlying given the regression relationship).
+* Upper left hand point has **low leverage, low influence**, outlies in a way not conforming to the regression relationship.
+* Lower left hand point has **low leverage, low influence** and is not to be an outlier in any sense.
+* Upper right hand point has **high leverage, but chooses not to extert it** and thus would have low actual influence by conforming to the regresison relationship of the other points.
+* Lower right hand point has **high leverage and would exert it** if it were included in the fit.
+
+
+## Influence measures
+* Do **?influence.measures** to see the full suite of influence measures in stats. The measures include
+  * `rstandard` - standardized residuals, residuals divided by their standard deviations)
+  * `rstudent` - standardized residuals, residuals divided by their standard deviations, where the **ith data point was deleted** in the calculation of the standard deviation for the residual to follow a t distribution
+  * `hatvalues` - measures of **leverage**
+  * `dffits` - change in the predicted response when the **i-th point is deleted in fitting the model**.
+  * `dfbetas` - change in individual coefficients when the $i^{th}$ point is deleted in fitting the model.
+  * `cooks.distance` - overall change in teh coefficients when the $i^{th}$ point is deleted.
+  * `resid` - returns the ordinary residuals
+  * `resid(fit) / (1 - hatvalues(fit))` where `fit` is the linear model fit returns the PRESS residuals, i.e. the leave one out cross validation residuals - the difference in the response and the predicted response at data point $i$, where it was not included in the model fitting.
+
+
+## How do I use all of these things?
+* Be wary of simplistic rules for diagnostic plots and measures. The use of these tools is context specific. It's better to understand what they are trying to accomplish and use them judiciously.
+* Not all of the measures have meaningful absolute scales. You can look at them relative to the values across the data.
+* They probe your data in different ways to diagnose different problems. 
+* Patterns in your residual plots generally indicate some poor aspect of model fit. These can include:
+  * Heteroskedasticity (non constant variance).
+  * Missing model terms.
+  * Temporal patterns (plot residuals versus collection order).
+* Residual QQ plots investigate normality of the errors.
+* Leverage measures (hat values) can be useful for diagnosing data entry errors.
+* Influence measures get to the bottom line, 'how does deleting or including this point impact a particular aspect of the model'.
+
+
+## Case 1
+```{r, fig.height=5, fig.width=5, echo=FALSE}
+x <- c(10, rnorm(n))
+y <- c(10, c(rnorm(n)))
+
+plot(
+  x,
+  y,
+  frame = FALSE,
+  cex = 2,
+  pch = 21,
+  bg = "lightblue",
+  col = "black"
+)
+abline(lm(y ~ x))
+```
+
+
+## The code
+```{r}
+n <- 100
+x <- c(10, rnorm(n))
+y <- c(10, c(rnorm(n)))
+plot(
+  x,
+  y,
+  frame = FALSE,
+  cex = 2,
+  pch = 21,
+  bg = "lightblue",
+  col = "black"
+)
+abline(lm(y ~ x))
+```
+
+* The point `c(10, 10)` has created a strong regression relationship where there shouldn't be one.
+
+
+## Showing a couple of the diagnostic values
+
+```{r}
+fit <- lm(y ~ x)
+plot(x, y)
+abline(fit)
+fit2 <- lm(y[2:101] ~ x[2:101])
+abline(fit2)
+summary(fit)
+summary(fit2)
+
+# dfbetas - change in individual coefficients when the ith point is deleted in fitting the model.
+round(dfbetas(fit)[1 : 10, 2], 3)
+
+# Leverage is largely measured by one quantity, so called hat diagonals, which can be obtained in R by the function hatvalues. The hat values are necessarily between 0 and 1 with larger values indicating greater (potential for) leverage.
+round(hatvalues(fit)[1 : 10], 3)
+```
+
+---
+## Case 2
+```{r, fig.height=5, fig.width=5, echo=FALSE}
+x <- rnorm(n)
+y <- x + rnorm(n, sd = .3)
+x <- c(5, x)
+y <- c(5, y)
+plot(
+  x,
+  y,
+  frame = FALSE,
+  cex = 2,
+  pch = 21,
+  bg = "lightblue",
+  col = "black"
+)
+fit2 <- lm(y ~ x)
+abline(fit2)            
+```
+
+
+## Looking at some of the diagnostics
+```{r, echo = TRUE}
+
+# change in individual coefficients when the ith point is deleted in fitting the model.
+round(
+  dfbetas(fit2)[1 : 10, 2], 
+  3)
+
+# leverage
+round(
+  hatvalues(fit2)[1 : 10], 
+  3)
+```
+
+---
+## Example described by Stefanski TAS 2007 Vol 61.
+```{r, fig.height=4, fig.width=4}
+## Don't everyone hit this server at once.  Read the paper first.
+dat <- read.table('http://www4.stat.ncsu.edu/~stefanski/NSF_Supported/Hidden_Images/orly_owl_files/orly_owl_Lin_4p_5_flat.txt', header = FALSE)
+pairs(dat)
+```
+
+
+## Got our P-values, should we bother to do a residual plot?
+```{r}
+summary(lm(V1 ~ . -1, data = dat))$coef
+```
+
+## Residual plot
+### P-values significant, O RLY?
+```{r, fig.height=4, fig.width=4, echo = TRUE}
+fit <- lm(V1 ~ . - 1, data = dat)
+summary(fit)
+plot(predict(fit), resid(fit), pch = '.')
+```
+
+
+## Back to the Swiss data
+```{r, fig.height = 5, fig.width = 5, echo=FALSE}
+data(swiss)
+par(mfrow = c(2, 2))
+fit <- lm(Fertility ~ . , data = swiss)
+plot(fit)
+dev.off()
 ```
 
 
@@ -1184,3 +1415,319 @@ ggsave("heart_disease_probabilities.pdf")
 ```
 
 # Count data
+
+## Key ideas
+
+* Many data take the form of counts
+  * Calls to a call center
+  * Number of flu cases in an area
+  * Number of cars that cross a bridge
+* Data may also be in the form of rates
+  * Percent of children passing a test
+  * Percent of hits to a website from a country
+* Linear regression with transformation is an option
+
+
+## Poisson distribution
+- The Poisson distribution is a useful model for counts and rates
+- Here a rate is count per some monitoring time
+- Some examples uses of the Poisson distribution
+    - Modeling web traffic hits
+    - Incidence rates
+    - Approximating binomial probabilities with small $p$ and large $n$
+    - Analyzing contigency table data
+
+---
+## The Poisson mass function
+
+$$
+P(X = x) = \frac{(t\lambda)^x e^{-t\lambda}}{x!}
+$$
+
+```{r simPois,fig.height=4,fig.width=8, cache=TRUE}
+par(mfrow = c(1, 3))
+plot(0 : 10, dpois(0 : 10, lambda = 2), type = "h", frame = FALSE)
+plot(0 : 20, dpois(0 : 20, lambda = 10), type = "h", frame = FALSE)
+plot(0 : 200, dpois(0 : 200, lambda = 100), type = "h", frame = FALSE) 
+```
+
+
+## Poisson distribution
+### Sort of, showing that the mean and variance are equal
+```{r}
+x <- 0 : 10000; lambda = 3
+mu <- sum(x * dpois(x, lambda = lambda))
+sigmasq <- sum((x - mu)^2 * dpois(x, lambda = lambda))
+c(mu, sigmasq)
+```
+
+
+## Example: Leek Group Website Traffic
+* Consider the daily counts to Jeff Leek's web site
+
+[http://biostat.jhsph.edu/~jleek/](http://biostat.jhsph.edu/~jleek/)
+
+* Since the unit of time is always one day, set $t = 1$ and then
+the Poisson mean is interpretted as web hits per day. (If we set $t = 24$, it would be web hits per hour).
+
+
+## Website data
+
+```{r leekLoad,cache=TRUE}
+# download.file("https://dl.dropboxusercontent.com/u/7710864/data/gaData.rda", 
+#               destfile = "./data/gaData.rda", 
+#               method="curl")
+load("./data/gaData.rda")
+gaData$julian <- julian(gaData$date)
+head(gaData)
+```
+
+
+## Plot data
+
+```{r, dependson="leekLoad",fig.height=4.5,fig.width=4.5}
+dev.off()
+
+plot(gaData$julian,
+     gaData$visits,
+     pch = 19,
+     col = "darkgrey",
+     xlab = "Julian",
+     ylab = "Visits")
+```
+
+
+## Linear regression
+
+$$ NH_i = b_0 + b_1 JD_i + e_i $$
+
+$NH_i$ - number of hits to the website
+
+$JD_i$ - day of the year (Julian day)
+
+$b_0$ - number of hits on Julian day 0 (1970-01-01)
+
+$b_1$ - increase in number of hits per unit day
+
+$e_i$ - variation due to everything we didn't measure
+
+
+## Linear regression line
+
+```{r linReg, dependson="leekLoad",fig.height=4,fig.width=4, cache=TRUE}
+plot(
+  gaData$julian,
+  gaData$visits,
+  pch = 19,
+  col = "darkgrey",
+  xlab = "Julian",
+  ylab = "Visits"
+)
+
+lm1 <- lm(gaData$visits ~ gaData$julian)
+
+abline(lm1, col = "red", lwd = 3)
+```
+
+
+## Aside, taking the log of the outcome
+- Taking the natural log of the outcome has a specific interpretation.
+- Consider the model
+
+$$
+log(NH_i) = b_0 + b_1 JD_i + e_i 
+$$
+
+$NH_i$ - number of hits to the website
+
+$JD_i$ - day of the year (Julian day)
+
+$b_0$ - log number of hits on Julian day 0 (1970-01-01)
+
+$b_1$ - increase in log number of hits per unit day
+
+$e_i$ - variation due to everything we didn't measure
+
+
+## Exponentiating coefficients
+
+- When you take the natural log of outcomes and fit a regression model, your exponentiated coefficients estimate things about geometric means.
+- $e^{\beta_0}$ estimated geometric mean hits on day 0
+- $e^{\beta_1}$ estimated relative increase or decrease in geometric mean hits per day
+- There's a problem with logs with you have zero counts, adding a constant works
+```{r}
+round(exp(coef(lm(I(log(gaData$visits + 1)) ~ gaData$julian))), 5)
+```
+
+
+## Linear vs. Poisson regression
+
+__Linear__
+$$ NH_i = b_0 + b_1 JD_i + e_i $$
+
+or
+
+$$ E[NH_i | JD_i, b_0, b_1] = b_0 + b_1 JD_i$$
+
+__Poisson/log-linear__
+
+$$ \log\left(E[NH_i | JD_i, b_0, b_1]\right) = b_0 + b_1 JD_i $$
+
+or
+
+$$ E[NH_i | JD_i, b_0, b_1] = \exp\left(b_0 + b_1 JD_i\right) $$
+
+
+---
+
+## Multiplicative differences
+
+$$ E[NH_i | JD_i, b_0, b_1] = \exp\left(b_0 + b_1 JD_i\right) $$
+
+$$ E[NH_i | JD_i, b_0, b_1] = \exp\left(b_0 \right)\exp\left(b_1 JD_i\right) $$
+
+
+If $JD_i$ is increased by one unit, $E[NH_i | JD_i, b_0, b_1]$ is multiplied by $\exp\left(b_1\right)$
+
+
+## Poisson regression in R
+
+```{r poisReg, dependson="linReg",fig.height=4.5,fig.width=4.5, cache=TRUE}
+plot(
+  gaData$julian,
+  gaData$visits,
+  pch = 19,
+  col = "darkgrey",
+  xlab = "Julian",
+  ylab = "Visits"
+)
+glm1 <- glm(gaData$visits ~ gaData$julian, family = "poisson")
+summary(glm1)
+abline(lm1, col = "red", lwd = 3)
+lines(gaData$julian, glm1$fitted, col = "blue", lwd = 3)
+```
+
+
+## Mean-variance relationship?
+
+```{r, dependson="poisReg",fig.height=4.5,fig.width=4.5}
+plot(
+  glm1$fitted,
+  glm1$residuals,
+  pch = 19,
+  col = "grey",
+  ylab = "Residuals",
+  xlab = "Fitted"
+)
+```
+
+
+## Model agnostic standard errors 
+
+```{r agnostic}
+library(sandwich)
+confint.agnostic <- function (object, parm, level = 0.95, ...)
+{
+    cf <- coef(object); pnames <- names(cf)
+    if (missing(parm))
+        parm <- pnames
+    else if (is.numeric(parm))
+        parm <- pnames[parm]
+    a <- (1 - level)/2; a <- c(a, 1 - a)
+    pct <- stats:::format.perc(a, 3)
+    fac <- qnorm(a)
+    ci <- array(NA, dim = c(length(parm), 2L), dimnames = list(parm,
+                                                               pct))
+    ses <- sqrt(diag(sandwich::vcovHC(object)))[parm]
+    ci[] <- cf[parm] + ses %o% fac
+    ci
+}
+```
+[http://stackoverflow.com/questions/3817182/vcovhc-and-confidence-interval](http://stackoverflow.com/questions/3817182/vcovhc-and-confidence-interval)
+
+
+## Estimating confidence intervals
+
+```{r}
+confint(glm1)
+confint.agnostic(glm1)
+```
+
+
+## Rates 
+
+$$ E[NHSS_i | JD_i, b_0, b_1]/NH_i = \exp\left(b_0 + b_1 JD_i\right) $$
+
+$$ \log\left(E[NHSS_i | JD_i, b_0, b_1]\right) - \log(NH_i)  =  b_0 + b_1 JD_i $$
+
+
+$$ \log\left(E[NHSS_i | JD_i, b_0, b_1]\right) = \log(NH_i) + b_0 + b_1 JD_i $$
+
+
+## Fitting rates in R 
+
+```{r ratesFit,dependson="agnostic", cache=TRUE,fig.height=4,fig.width=4}
+glm2 <-
+  glm(
+    gaData$simplystats ~ julian(gaData$date),
+    offset = log(visits + 1),                   # with offset
+    family = "poisson",
+    data = gaData
+  )
+
+plot(
+  julian(gaData$date),
+  glm2$fitted,
+  col = "blue",
+  pch = 19,
+  xlab = "Date",
+  ylab = "Fitted Counts"
+)
+
+points(julian(gaData$date),
+       glm1$fitted,
+       col = "red",
+       pch = 19)
+
+```
+
+
+## Fitting rates in R 
+
+```{r,dependson="ratesFit",fig.height=4,fig.width=4}
+
+glm2 <-
+  glm(
+    gaData$simplystats ~ julian(gaData$date),
+    offset = log(visits + 1),
+    family = "poisson",
+    data = gaData
+  )
+
+plot(
+  julian(gaData$date),
+  gaData$simplystats / (gaData$visits + 1),
+  col = "grey",
+  xlab = "Date",
+  ylab = "Fitted Rates",
+  pch = 19
+)
+
+lines(
+  julian(gaData$date),
+  glm2$fitted / (gaData$visits + 1),
+  col = "blue",
+  lwd = 3
+)
+```
+
+
+## More information
+
+* [Log-linear models and multiway tables](http://ww2.coastal.edu/kingw/statistics/R-tutorials/loglin.html)
+* [Wikipedia on Poisson regression](http://en.wikipedia.org/wiki/Poisson_regression), [Wikipedia on overdispersion](http://en.wikipedia.org/wiki/Overdispersion)
+* [Regression models for count data in R](http://cran.r-project.org/web/packages/pscl/vignettes/countreg.pdf)
+* [pscl package](http://cran.r-project.org/web/packages/pscl/index.html) - the function _zeroinfl_ fits zero inflated models. 
+
+
+
