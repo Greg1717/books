@@ -377,14 +377,14 @@ g
 
 ```
 
-## Swirl - Residual Variation
-## Swirl - Introduction to Multivariable Regression
-## Swirl - MultiVar Examples
 ## Quiz 2
-
 https://rpubs.com/cwerneck/333939
 
+
 # Multivariable examples and tricks
+
+## Swiss dataset
+
 ```{r}
 require(datasets); data(swiss)
 require(GGally)
@@ -399,9 +399,10 @@ my_fn <- function(data, mapping, method="loess", ...){
       p
     }
 
-# Default loess curve    
-ggpairs(swiss, lower = list(continuous = wrap(my_fn, method="loess")))
+# Make a matrix of plots with a given data set
+ggpairs(swiss)
 ggpairs(swiss, lower = list(continuous = wrap(my_fn, method="lm")))
+ggpairs(swiss, lower = list(continuous = wrap(my_fn, method="loess")))
 
 # my_fn <- function(data, mapping, pts=list(), smt=list(), ...){
 #               ggplot(data = data, mapping = mapping, ...) + 
@@ -420,14 +421,22 @@ ggpairs(swiss, lower = list(continuous = wrap(my_fn, method="lm")))
 ```{r}
 summary(lm(Fertility ~ . , data = swiss))
 ```
+
 Our model estimates an expected 0.17 decrease in standardized fertility for every 1% increase in percentage of males involved in agriculture, holding the remaining variables constant.
+
 Interestingly, the **unadjusted** estimate is:
+
 ```{r}
 summary(lm(Fertility ~ Agriculture, data = swiss))$coefficients
 ```
+
 Notice that the sign of the slope estimate reversed! Relationship between X and Y may change if we account for Z.
 
+
 ## Simulation study
+
+Below we simulate 100 random variables with a linear relationship between X1, X2 and Y. Notably, we generate X1 as a linear function of X2. 
+
 ```{r}
 n  <- 100
 x2 <- 1:n
@@ -436,14 +445,716 @@ y  <- -x1 +  x2 + rnorm(n, sd = .01)
 x2
 x1
 y
+plot(x2, y)
+plot(x1, y)
 summary(lm(y ~ x1))$coef
 summary(lm(y ~ x1 + x2))$coef
+plot(resid(lm(x1 ~ x2)), resid(lm(y ~ x2)))
 ```
+
 Our unadjusted model is picking up the effect X2 as it’s represented in X1.
+
+
+## Insect Sprays
+
+Let’s use a linear model just to illustrate factor variables.
+
+```{r}
+require(datasets)
+data(InsectSprays)
+require(stats)
+require(ggplot2)
+g <- ggplot(data = InsectSprays, aes(y = count, x = spray, fill = spray)) 
+g <- g + geom_violin(colour = "black", size = 2)
+g <- g + xlab("Type of spray") + ylab("Insect count")
+g
+```
+
+
+First, let’s set Spray A as the reference (the default, since it has the lowest alphanumeric factor level).
+
+```{r}
+summary(lm(count ~ spray, data = InsectSprays))$coef
+```
+
+Therefore, 0.8333 is the estimated mean comparing Spray B to Spray A (as B - A), -12.4167 compares Spray C to Spray A (as C - A) and so on. The inferential statistics: standard errors, t value and P-value all correspond to those comparisons.
+
+Omitting intercept:
+
+```{r}
+summary(lm(count ~ spray - 1, data = InsectSprays))$coef
+```
+
+So, for example, 14.5 is the mean for Spray A (as we already knew), 15.33 is the mean for Spray B (14.5 + 0.8333 from our previous model formulation), 2.083 is the mean for Spray C (14.5 - 12.4167 from our previous model formulation) and so on. This is a nice trick if you want your **model formulated in the terms of the group means**, rather than the **group comparisons relative to the reference group**.
+Also, if there are no other covariates, the estimated coefficients for this model are exactly the empirical means of the groups.
+
+
+Often your lowest alphanumeric level isn’t the level that you’re most interested in as a reference group. There’s an easy fix for that with factor variables; use the **relevel** function. Here we give a simple example. We created a variable spray2 that has Spray C as the reference level.
+
+```{r relevel}
+spray2 <- relevel(InsectSprays$spray, "C")
+summary(lm(count ~ spray2, data = InsectSprays))$coef
+```
+
+## Summary of dummy variables
+It’s essential to understand how dummy variables are treated, as otherwise huge interpretation errors can be made. Here we give a brief bullet summary of dummy variables to help solidify this information.
+
+- If we treat a **variable as a factor**, R includes an intercept and omits the alphabetically first level of the factor.
+– The intercept is the estimated mean for the reference level.
+– The intercept t-test tests for whether or not the mean for the reference level is 0. 
+– All other t-tests are for comparisons of the other levels versus the reference level. 
+– Other group means are obtained the intercept plus their coefficient.
+
+- If we **omit an intercept**, then it includes terms for all levels of the factor. 
+– Group means are now the coefficients.
+– Tests are tests of whether the groups are different than zero.
+
+- If we want comparisons between two levels, neither of which is the reference level, we could **refit** the model with one of them as the **reference level**.
+
+
+## Further analysis of the swiss dataset
+
+```{r}
+library(datasets)
+data(swiss)
+head(swiss)
+
+```
+Let’s create some dummy variables in the swiss dataset to illustrate them in a more multivariable context.
+Let’s create a binary variable out of the variable Catholic to illustrate dummy variables in multivariable models. However, it should be noted that this isn’t patently absurd, since the variable is highly bimodal anyway. Let’s just split at majority Catholic or not:
+
+```{r}
+library(dplyr)
+swiss <- data.table::as.data.table(swiss)
+swiss[, CatholicBin := 1 * (Catholic > 50)]
+# swiss <- mutate(swiss, CatholicBin = 1 * (Catholic > 50))
+
+g <- ggplot(swiss, aes(x = Agriculture, y = Fertility, colour = factor(CatholicBin))) 
+g <- g + geom_point(size = 6, colour = "black") + geom_point(size = 4)
+g <- g + stat_smooth(method = "lm")
+g <- g + xlab("% in Agriculture") + ylab("Fertility")
+g
+
+summary(lm(Fertility ~ Agriculture, data = swiss))$coef
+
+
+```
+
+This model just assumes one line through the data (linear regression). Now let’s add our second variable.
+
+Thus, the coefficient in front of the binary variable is the change in the intercept between non-Catholic and Catholic majority provinces. In other words, this model fits parallel lines for the two levels of the factor variable. If the factor variable had 4 levels, it would fit 4 parallel lines, where the coefficients for the factors are the change in the intercepts to the reference level.
+
+```{r}
+## Parallel lines
+summary(lm(Fertility ~ Agriculture + factor(CatholicBin), data = swiss))$coef
+```
+
+Thus, 7.8843 is the estimated change in the intercept in the expected relationship between Agriculture and Fertility going from a non-Catholic majority province to a Catholic majority. Often, however, we want both a **different intercept and slope**. This is easily obtained with an **interaction term**. 
+
+```{r}
+summary(lm(Fertility ~ Agriculture * factor(CatholicBin), data = swiss))$coef
+```
+
+Thus, 2.8577 is the **estimated change in the intercept** of the linear relationship between Agriculture and Fertility going from non-Catholic majority to Catholic majority to Catholic majority provinces. 
+
+The interaction term, 0.08914, is the estimate **change in the slope**. 
+
+The estimated intercept in non-Catholic provinces is 62.04993 while the estimated intercept in Catholic provinces is 62.04993 + 2.85770. The estimated slope in non-Catholic majority provinces is 0.09612 while it is 0.09612 + 0.08914 for Catholic majority provinces. 
+
+If the factor has more than two levels, **all of the main effects are change in the intercepts from the reference level** while **all of the interaction terms are changes in slope** (again compared to the reference level).
+
+```{r plot interaction}
+lm_fit <- lm(Fertility ~ Agriculture * factor(CatholicBin), data = swiss)
+plot(swiss$Agriculture, swiss$Fertility)
+abline(lm_fit)
+coef(lm_fit)
+
+abline(a = lm_fit$coefficients[1] + lm_fit$coefficients[[3]], 
+       b = lm_fit$coefficients[2] + lm_fit$coefficients[[4]])
+```
+
 
 # Adjustment
 
+Adjustment, is the idea of **putting regressors into a linear model** to investigate the role of a third variable on the relationship between another two.  
+
+It is often the case that a third variable can distort, or confound, the relationship between two others.
+
+As an example, consider looking at lung cancer rates and breath mint usage. For the sake of completeness, imagine if you were looking at forced expiratory volume (a measure of lung function) and breath mint usage. If you found a statistically significant regression relationship, it wouldn’t be wise to rush off to the newspapers with the headline “Breath mint usage causes shortness of breath!”, for a variety of reasons. First off, even if the association is sound, you don’t know that it’s causal. But, more importantly in this case, the likely culprit is smoking habits. Smoking rates are likely related to both breath mint usage rates and lung function. How would you defend your finding against the accusation that it’s just variability in smoking habits?
+
+If your finding held up among non-smokers and smokers **analyzed separately**, then you might have something. In other words, people wouldn’t even begin to believe this finding unless it held up while holding smoking status constant. 
+
+**That is the idea of adding a regression variable into a model as adjustment**. The coefficient of interest is interpreted as the effect of the predictor on the response, holding the adjustment variable constant.
+
+In this chapter, we’ll use simulation to investigate how adding a regressor into a model addresses the idea of adjustment.
+
+
+We’re interested in the relationship between our binary treatment, T, and Y. However, we’re
+concerned that the relationship may depend on the continuous variable, X.
+
+Let’s simulate some data.
+## Simulation 1
+```{r}
+n <- 100
+t <- rep(c(0, 1), c(n/2, n/2))
+t
+x <- c(runif(n/2), runif(n/2))
+x
+beta0 <- 0
+beta1 <- 2
+tau <- 1
+sigma <- .2
+
+y <- beta0 + x * beta1 + t * tau + rnorm(n, sd = sigma)
+
+plot(x, y, type = "n", frame = FALSE) 
+
+abline(lm(y ~ x), lwd = 2)
+abline(h = mean(y[1 : (n/2)]), lwd = 3) 
+abline(h = mean(y[(n/2 + 1) : n]), lwd = 3) 
+
+fit <- lm(y ~ x + t)
+fit
+abline(coef(fit)[1], coef(fit)[2], lwd = 3)
+abline(coef(fit)[1] + coef(fit)[3], coef(fit)[2], lwd = 3)
+
+points(
+  x[1:(n / 2)],
+  y[1:(n / 2)],
+  pch = 21,
+  col = "black",
+  bg = "lightblue",
+  cex = 2
+)
+
+points(x[(n / 2 + 1):n],
+       y[(n / 2 + 1):n],
+       pch = 21,
+       col = "black",
+       bg = "salmon",
+       cex = 2)
+```
+
+Some things to note in this simulation:
+
+* The X variable is unrelated to group status
+* The X variable is related to Y, but the intercept depends
+  on group status.
+* The group variable is related to Y.
+  * The relationship between group status and Y is constant depending on X.
+  * The relationship between group and Y disregarding X is about the same as holding X constant.
+  
+  
+## Simulation 2
+```{r, fig.height=5, fig.width=5, echo = FALSE, results='hide'}
+n <- 100
+t <- rep(c(0, 1), c(n / 2, n / 2))
+x <- c(runif(n / 2), 1.5 + runif(n / 2))                       # x was changed!
+x
+beta0 <- 0
+beta1 <- 2
+tau <- 0
+sigma <- .2
+y <- beta0 + x * beta1 + t * tau + rnorm(n, sd = sigma)
+plot(x, y, type = "n", frame = FALSE)
+abline(lm(y ~ x), lwd = 2)
+abline(h = mean(y[1:(n / 2)]), lwd = 3)
+abline(h = mean(y[(n / 2 + 1):n]), lwd = 3)
+fit <- lm(y ~ x + t)
+abline(coef(fit)[1], coef(fit)[2], lwd = 3)
+abline(coef(fit)[1] + coef(fit)[3], coef(fit)[2], lwd = 3)
+
+points(
+  x[1:(n / 2)],
+  y[1:(n / 2)],
+  pch = 21,
+  col = "black",
+  bg = "lightblue",
+  cex = 2
+)
+points(
+  x[(n / 2 + 1):n],
+  y[(n / 2 + 1):n],
+  pch = 21,
+  col = "black",
+  bg = "salmon",
+  cex = 2
+)
+```
+Some things to note in this simulation:
+* The X variable is highly related to group status
+* The X variable is related to Y, the intercept
+  doesn't depend on the group variable.
+  * The X variable remains related to Y holding group status constant
+* The group variable is marginally related to Y disregarding X.
+* The model would estimate no adjusted effect due to group.
+  * There isn't any data to inform the relationship between
+    group and Y.
+  * This conclusion is entirely based on the model.
+  
+  
+  
+## Simulation 3
+```{r, fig.height=5, fig.width=5, echo = FALSE, results='hide'}
+n <- 100
+t <- rep(c(0, 1), c(n / 2, n / 2))
+x <- c(runif(n / 2), .9 + runif(n / 2))
+
+beta0 <- 0
+beta1 <- 2
+tau <- -1
+sigma <- .2
+y <- beta0 + x * beta1 + t * tau + rnorm(n, sd = sigma)
+
+plot(x, y, type = "n", frame = FALSE)
+
+abline(lm(y ~ x), lwd = 2)
+
+abline(h = mean(y[1:(n / 2)]), lwd = 3)
+abline(h = mean(y[(n / 2 + 1):n]), lwd = 3)
+
+fit <- lm(y ~ x + t)
+
+abline(coef(fit)[1], coef(fit)[2], lwd = 3)
+abline(coef(fit)[1] + coef(fit)[3], coef(fit)[2], lwd = 3)
+
+points(
+  x[1:(n / 2)],
+  y[1:(n / 2)],
+  pch = 21,
+  col = "black",
+  bg = "lightblue",
+  cex = 2
+)
+points(
+  x[(n / 2 + 1):n],
+  y[(n / 2 + 1):n],
+  pch = 21,
+  col = "black",
+  bg = "salmon",
+  cex = 2
+)
+```
+
+* Marginal association has red group higher than blue.
+* Adjusted relationship has blue group higher than red.
+* Group status related to X.
+* There is some direct evidence for comparing red and blue holding X fixed.
+
+
+## Simulation 4
+```{r, fig.height=5, fig.width=5, echo = FALSE, results='hide'}
+n <-
+  100
+t <-
+  rep(c(0, 1), c(n / 2, n / 2))
+x <- c(.5 + runif(n / 2), runif(n / 2))
+
+beta0 <- 0
+beta1 <- 2
+tau <- 1
+sigma <- .2
+y <- beta0 + x * beta1 + t * tau + rnorm(n, sd = sigma)
+plot(x, y, type = "n", frame = FALSE)
+abline(lm(y ~ x), lwd = 2)
+abline(h = mean(y[1:(n / 2)]), lwd = 3)
+abline(h = mean(y[(n / 2 + 1):n]), lwd = 3)
+fit <- lm(y ~ x + t)
+abline(coef(fit)[1], coef(fit)[2], lwd = 3)
+abline(coef(fit)[1] + coef(fit)[3], coef(fit)[2], lwd = 3)
+points(
+  x[1:(n / 2)],
+  y[1:(n / 2)],
+  pch = 21,
+  col = "black",
+  bg = "lightblue",
+  cex = 2
+)
+points(
+  x[(n / 2 + 1):n],
+  y[(n / 2 + 1):n],
+  pch = 21,
+  col = "black",
+  bg = "salmon",
+  cex = 2
+)
+```
+
+Some things to note in this simulation:
+* No marginal association between group status and Y.
+* Strong adjusted relationship.
+* Group status not related to X.
+* There is lots of direct evidence for comparing red and blue
+holding X fixed.
+
+
+## Simulation 5
+```{r, fig.height=5, fig.width=5, echo = FALSE, results='hide'}
+n <-
+  100
+t <-
+  rep(c(0, 1), c(n / 2, n / 2))
+x <- c(runif(n / 2, -1, 1), runif(n / 2, -1, 1))
+
+beta0 <- 0
+beta1 <- 2
+tau <- 0
+tau1 <- -4
+sigma <- .2
+y <-
+  beta0 + x * beta1 + t * tau + t * x * tau1 + rnorm(n, sd = sigma)
+plot(x, y, type = "n", frame = FALSE)
+abline(lm(y ~ x), lwd = 2)
+abline(h = mean(y[1:(n / 2)]), lwd = 3)
+abline(h = mean(y[(n / 2 + 1):n]), lwd = 3)
+
+fit <- lm(y ~ x + t + I(x * t))
+
+abline(coef(fit)[1], coef(fit)[2], lwd = 3)
+abline(coef(fit)[1] + coef(fit)[3], coef(fit)[2] + coef(fit)[4], lwd = 3)
+
+points(
+  x[1:(n / 2)],
+  y[1:(n / 2)],
+  pch = 21,
+  col = "black",
+  bg = "lightblue",
+  cex = 2
+)
+
+points(
+  x[(n / 2 + 1):n],
+  y[(n / 2 + 1):n],
+  pch = 21,
+  col = "black",
+  bg = "salmon",
+  cex = 2
+)
+```
+
+Some things to note from this simulation:
+* There is no such thing as a group effect here.
+  * The impact of group reverses itself depending on X.
+  * Both intercept and slope depends on group.
+* Group status and X unrelated.
+  * There's lots of information about group effects holding X fixed.
+
+
+## Simulation 6
+```{r, fig.height=5, fig.width=5, echo = FALSE, results='hide'}
+p <- 1
+n <- 100
+x2 <- runif(n)
+x1 <- p * runif(n) - (1 - p) * x2
+beta0 <- 0
+beta1 <- 1
+tau <- 4
+sigma <- .01
+y <- beta0 + x1 * beta1 + tau * x2 + rnorm(n, sd = sigma)
+plot(x1, y, type = "n", frame = FALSE)
+abline(lm(y ~ x1), lwd = 2)
+
+co.pal <- heat.colors(n)
+
+points(
+  x1,
+  y,
+  pch = 21,
+  col = "black",
+  bg = co.pal[round((n - 1) * x2 + 1)],
+  cex = 2
+)
+```
+
+
+## plot3d
+```{r}
+library(rgl)
+plot3d(x1, x2, y)
+```
+
+---
+## Residual relationship
+```{r, fig.height=5, fig.width=5, echo = FALSE, results='hide'}
+plot(
+  resid(lm(x1 ~ x2)),
+  resid(lm(y ~ x2)),
+  frame = FALSE,
+  col = "black",
+  bg = "lightblue",
+  pch = 21,
+  cex = 2
+)
+abline(lm(I(resid(lm(
+  x1 ~ x2
+))) ~ I(resid(lm(
+  y ~ x2
+)))), lwd = 2)
+```
+
+Some things to note from this simulation:
+
+* X1 unrelated to X2
+* X2 strongly related to Y
+* Adjusted relationship between X1 and Y largely unchanged
+  by considering X2.
+  * Almost no residual variability after accounting for X2.
+
+---
+## Some final thoughts
+* Modeling multivariate relationships is difficult.
+* Play around with simulations to see how the
+  inclusion or exclusion of another variable can
+  change analyses.
+* The results of these analyses deal with the
+impact of variables on associations.
+  * Ascertaining mechanisms or cause are difficult subjects
+    to be added on top of difficulty in understanding multivariate associations.
+
+
+  
 # Residuals, variation, diagnostics
+
+## The linear model
+
+```{r, fig.height = 5, fig.width = 5}
+data(swiss)
+par(mfrow = c(2, 2))
+fit <- lm(Fertility ~ . , data = swiss)
+summary(fit)
+plot(fit)
+dev.off()
+```
+
+## Influential, high leverage and outlying points
+```{r, fig.height = 5, fig.width=5, echo = FALSE, results='hide'}
+n <- 100
+x <- rnorm(n)
+x
+plot(x)
+hist(x)
+y <- x + rnorm(n, sd = .3)
+plot(y)
+
+plot(
+  c(-3, 6),
+  c(-3, 6),
+  type = "n",
+  frame = FALSE,
+  xlab = "X",
+  ylab = "Y"
+)
+
+abline(lm(y ~ x), lwd = 2)
+
+points(
+  x,
+  y,
+  cex = 2,
+  bg = "lightblue",
+  col = "black",
+  pch = 21
+)
+
+points(
+  0,
+  0,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+
+points(
+  0,
+  5,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+
+points(
+  5,
+  5,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+
+points(
+  5,
+  0,
+  cex = 2,
+  bg = "darkorange",
+  col = "black",
+  pch = 21
+)
+```
+
+
+## Summary of the plot
+Calling a point an outlier is vague. 
+
+* Outliers can be the result of spurious or real processes.
+* Outliers can have varying degrees of influence.
+* Outliers can conform to the regression relationship (i.e being marginally outlying in X or Y, but not outlying given the regression relationship).
+* Upper left hand point has **low leverage, low influence**, outlies in a way not conforming to the regression relationship.
+* Lower left hand point has **low leverage, low influence** and is not to be an outlier in any sense.
+* Upper right hand point has **high leverage, but chooses not to extert it** and thus would have low actual influence by conforming to the regresison relationship of the other points.
+* Lower right hand point has **high leverage and would exert it** if it were included in the fit.
+
+
+## Influence measures
+* Do **?influence.measures** to see the full suite of influence measures in stats. The measures include
+  * `rstandard` - standardized residuals, residuals divided by their standard deviations)
+  * `rstudent` - standardized residuals, residuals divided by their standard deviations, where the **ith data point was deleted** in the calculation of the standard deviation for the residual to follow a t distribution
+  * `hatvalues` - measures of **leverage**
+  * `dffits` - change in the predicted response when the **i-th point is deleted in fitting the model**.
+  * `dfbetas` - change in individual coefficients when the $i^{th}$ point is deleted in fitting the model.
+  * `cooks.distance` - overall change in teh coefficients when the $i^{th}$ point is deleted.
+  * `resid` - returns the ordinary residuals
+  * `resid(fit) / (1 - hatvalues(fit))` where `fit` is the linear model fit returns the PRESS residuals, i.e. the leave one out cross validation residuals - the difference in the response and the predicted response at data point $i$, where it was not included in the model fitting.
+
+
+## How do I use all of these things?
+* Be wary of simplistic rules for diagnostic plots and measures. The use of these tools is context specific. It's better to understand what they are trying to accomplish and use them judiciously.
+* Not all of the measures have meaningful absolute scales. You can look at them relative to the values across the data.
+* They probe your data in different ways to diagnose different problems. 
+* Patterns in your residual plots generally indicate some poor aspect of model fit. These can include:
+  * Heteroskedasticity (non constant variance).
+  * Missing model terms.
+  * Temporal patterns (plot residuals versus collection order).
+* Residual QQ plots investigate normality of the errors.
+* Leverage measures (hat values) can be useful for diagnosing data entry errors.
+* Influence measures get to the bottom line, 'how does deleting or including this point impact a particular aspect of the model'.
+
+
+## Case 1
+```{r, fig.height=5, fig.width=5, echo=FALSE}
+x <- c(10, rnorm(n))
+y <- c(10, c(rnorm(n)))
+
+plot(
+  x,
+  y,
+  frame = FALSE,
+  cex = 2,
+  pch = 21,
+  bg = "lightblue",
+  col = "black"
+)
+abline(lm(y ~ x))
+```
+
+
+## The code
+```{r}
+n <- 100
+x <- c(10, rnorm(n))
+y <- c(10, c(rnorm(n)))
+plot(
+  x,
+  y,
+  frame = FALSE,
+  cex = 2,
+  pch = 21,
+  bg = "lightblue",
+  col = "black"
+)
+abline(lm(y ~ x))
+```
+
+* The point `c(10, 10)` has created a strong regression relationship where there shouldn't be one.
+
+
+## Showing a couple of the diagnostic values
+
+```{r}
+fit <- lm(y ~ x)
+plot(x, y)
+abline(fit)
+fit2 <- lm(y[2:101] ~ x[2:101])
+abline(fit2)
+summary(fit)
+summary(fit2)
+
+# dfbetas - change in individual coefficients when the ith point is deleted in fitting the model.
+round(dfbetas(fit)[1 : 10, 2], 3)
+
+# Leverage is largely measured by one quantity, so called hat diagonals, which can be obtained in R by the function hatvalues. The hat values are necessarily between 0 and 1 with larger values indicating greater (potential for) leverage.
+round(hatvalues(fit)[1 : 10], 3)
+```
+
+---
+## Case 2
+```{r, fig.height=5, fig.width=5, echo=FALSE}
+x <- rnorm(n)
+y <- x + rnorm(n, sd = .3)
+x <- c(5, x)
+y <- c(5, y)
+plot(
+  x,
+  y,
+  frame = FALSE,
+  cex = 2,
+  pch = 21,
+  bg = "lightblue",
+  col = "black"
+)
+fit2 <- lm(y ~ x)
+abline(fit2)            
+```
+
+
+## Looking at some of the diagnostics
+```{r, echo = TRUE}
+
+# change in individual coefficients when the ith point is deleted in fitting the model.
+round(
+  dfbetas(fit2)[1 : 10, 2], 
+  3)
+
+# leverage
+round(
+  hatvalues(fit2)[1 : 10], 
+  3)
+```
+
+---
+## Example described by Stefanski TAS 2007 Vol 61.
+```{r, fig.height=4, fig.width=4}
+## Don't everyone hit this server at once.  Read the paper first.
+dat <- read.table('http://www4.stat.ncsu.edu/~stefanski/NSF_Supported/Hidden_Images/orly_owl_files/orly_owl_Lin_4p_5_flat.txt', header = FALSE)
+pairs(dat)
+```
+
+
+## Got our P-values, should we bother to do a residual plot?
+```{r}
+summary(lm(V1 ~ . -1, data = dat))$coef
+```
+
+## Residual plot
+### P-values significant, O RLY?
+```{r, fig.height=4, fig.width=4, echo = TRUE}
+fit <- lm(V1 ~ . - 1, data = dat)
+summary(fit)
+plot(predict(fit), resid(fit), pch = '.')
+```
+
+
+## Back to the Swiss data
+```{r, fig.height = 5, fig.width = 5, echo=FALSE}
+data(swiss)
+par(mfrow = c(2, 2))
+fit <- lm(Fertility ~ . , data = swiss)
+plot(fit)
+dev.off()
+```
+
+
 
 # Multiple variables and model selection
 
@@ -466,13 +1177,11 @@ url <- "http://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/p
 
 # data <- read.csv(url, header=FALSE)
 # saveRDS(object = data,file = "heart_disease_cleveland.rds") 
-data <- readRDS("heart_disease_cleveland.rds")
+data <- readRDS("data/heart_disease_cleveland.rds")
 #####################################
-##
 ## Reformat the data so that it is
 ## 1) Easy to use (add nice column names)
 ## 2) Interpreted correctly by glm()..
-##
 #####################################
 head(data) # you see data, but no column names
  
@@ -517,6 +1226,7 @@ str(data) # this shows that we need to tell R which columns contain factors
 summary(data)
 
 ## First, convert "?"s to NAs...
+data[data == "?"]
 data[data == "?"] <- NA
 
 ## Now add factors for variables that are factors and clean up the factors
@@ -530,16 +1240,17 @@ data$restecg <- as.factor(data$restecg)
 data$exang <- as.factor(data$exang)
 data$slope <- as.factor(data$slope)
  
-data$ca <- as.integer(data$ca) # since this column had "?"s in it
-# R thinks that the levels for the factor are strings, but
-# we know they are integers, so first convert the strings to integers...
-data$ca <- as.factor(data$ca)  # ...then convert the integers to factor levels
+data$ca <- as.integer(data$ca)
+data$ca <- as.factor(data$ca)
  
 data$thal <- as.integer(data$thal) # "thal" also had "?"s in it.
 data$thal <- as.factor(data$thal)
  
 ## This next line replaces 0 and 1 with "Healthy" and "Unhealthy"
-data$hd <- ifelse(test=data$hd == 0, yes="Healthy", no="Unhealthy")
+data$hd <- ifelse(test = data$hd == 0,
+                  yes = "Healthy",
+                  no = "Unhealthy")
+
 data$hd <- as.factor(data$hd) # Now convert to a factor
  
 str(data) ## this shows that the correct columns are factors
@@ -558,15 +1269,12 @@ data <- data[!(is.na(data$ca) | is.na(data$thal)),]
 nrow(data)
  
 #####################################
-##
 ## Now we can do some quality control by making sure all of the factor
 ## levels are represented by people with and without heart disease (hd)
 ##
 ## NOTE: We also want to exclude variables that only have 1 or 2 samples in
 ## a category since +/- one or two samples can have a large effect on the
 ## odds/log(odds)
-##
-##
 #####################################
 xtabs(~ hd + sex, data=data)
 xtabs(~ hd + cp, data=data)
@@ -586,10 +1294,7 @@ xtabs(~ hd + thal, data=data)
 ## predictor...
 ## First, let's just look at the raw data...
 xtabs(~ hd + sex, data=data)
-#           sex
-# hd         F   M
-# Healthy    71  89
-# Unhealthy  25 112
+
 ## Most of the females are healthy and most of the males are unhealthy.
 ## Being female is likely to decrease the odds in being unhealthy.
 ##    In other words, if a sample is female, the odds are against it that it
@@ -605,9 +1310,7 @@ xtabs(~ hd + sex, data=data)
  
 logistic <- glm(hd ~ sex, data = data, family = "binomial")
 summary(logistic)
-## (Intercept)  -1.0438     0.2326  -4.488 7.18e-06 ***
-##   sexM        1.2737     0.2725   4.674 2.95e-06 ***
- 
+
 ## Let's start by going through the first coefficient...
 ## (Intercept)  -1.0438     0.2326  -4.488 7.18e-06 ***
 ##
@@ -712,3 +1415,318 @@ ggsave("heart_disease_probabilities.pdf")
 ```
 
 # Count data
+
+## Key ideas
+
+* Many data take the form of counts
+  * Calls to a call center
+  * Number of flu cases in an area
+  * Number of cars that cross a bridge
+* Data may also be in the form of rates
+  * Percent of children passing a test
+  * Percent of hits to a website from a country
+* Linear regression with transformation is an option
+
+
+## Poisson distribution
+- The Poisson distribution is a useful model for counts and rates
+- Here a rate is count per some monitoring time
+- Some examples uses of the Poisson distribution
+    - Modeling web traffic hits
+    - Incidence rates
+    - Approximating binomial probabilities with small $p$ and large $n$
+    - Analyzing contigency table data
+
+---
+## The Poisson mass function
+
+$$
+P(X = x) = \frac{(t\lambda)^x e^{-t\lambda}}{x!}
+$$
+
+```{r simPois,fig.height=4,fig.width=8, cache=TRUE}
+par(mfrow = c(1, 3))
+plot(0 : 10, dpois(0 : 10, lambda = 2), type = "h", frame = FALSE)
+plot(0 : 20, dpois(0 : 20, lambda = 10), type = "h", frame = FALSE)
+plot(0 : 200, dpois(0 : 200, lambda = 100), type = "h", frame = FALSE) 
+```
+
+
+## Poisson distribution
+### Sort of, showing that the mean and variance are equal
+```{r}
+x <- 0 : 10000; lambda = 3
+mu <- sum(x * dpois(x, lambda = lambda))
+sigmasq <- sum((x - mu)^2 * dpois(x, lambda = lambda))
+c(mu, sigmasq)
+```
+
+
+## Example: Leek Group Website Traffic
+* Consider the daily counts to Jeff Leek's web site
+
+[http://biostat.jhsph.edu/~jleek/](http://biostat.jhsph.edu/~jleek/)
+
+* Since the unit of time is always one day, set $t = 1$ and then
+the Poisson mean is interpretted as web hits per day. (If we set $t = 24$, it would be web hits per hour).
+
+
+Website data
+```{r leekLoad,cache=TRUE}
+# download.file("https://dl.dropboxusercontent.com/u/7710864/data/gaData.rda", 
+#               destfile = "./data/gaData.rda", 
+#               method="curl")
+load("./data/gaData.rda")
+gaData$julian <- julian(gaData$date)
+head(gaData)
+```
+
+
+Plot data
+```{r, dependson="leekLoad",fig.height=4.5,fig.width=4.5}
+dev.off()
+
+plot(gaData$julian,
+     gaData$visits,
+     pch = 19,
+     col = "darkgrey",
+     xlab = "Julian",
+     ylab = "Visits")
+```
+
+
+Linear regression:
+
+$$ NH_i = b_0 + b_1 JD_i + e_i $$
+
+$NH_i$ - number of hits to the website
+
+$JD_i$ - day of the year (Julian day)
+
+$b_0$ - number of hits on Julian day 0 (1970-01-01)
+
+$b_1$ - increase in number of hits per unit day
+
+$e_i$ - variation due to everything we didn't measure
+
+
+Linear regression line: 
+
+```{r linReg, dependson="leekLoad",fig.height=4,fig.width=4, cache=TRUE}
+plot(
+  gaData$julian,
+  gaData$visits,
+  pch = 19,
+  col = "darkgrey",
+  xlab = "Julian",
+  ylab = "Visits"
+)
+
+lm1 <- lm(gaData$visits ~ gaData$julian)
+
+abline(lm1, col = "red", lwd = 3)
+```
+
+
+Aside, taking the log of the outcome:
+- Taking the natural log of the outcome has a specific interpretation.
+- Consider the model
+
+$$
+log(NH_i) = b_0 + b_1 JD_i + e_i 
+$$
+
+$NH_i$ - number of hits to the website
+
+$JD_i$ - day of the year (Julian day)
+
+$b_0$ - log number of hits on Julian day 0 (1970-01-01)
+
+$b_1$ - increase in log number of hits per unit day
+
+$e_i$ - variation due to everything we didn't measure
+
+
+## Exponentiating coefficients
+
+- When you take the natural log of outcomes and fit a regression model, your exponentiated coefficients estimate things about geometric means.
+- $e^{\beta_0}$ estimated geometric mean hits on day 0
+- $e^{\beta_1}$ estimated relative increase or decrease in geometric mean hits per day
+- There's a problem with logs with you have zero counts, adding a constant works
+```{r}
+round(exp(coef(lm(I(log(gaData$visits + 1)) ~ gaData$julian))), 5)
+```
+
+
+## Linear vs. Poisson regression
+
+__Linear__
+$$ NH_i = b_0 + b_1 JD_i + e_i $$
+
+or
+
+$$ E[NH_i | JD_i, b_0, b_1] = b_0 + b_1 JD_i$$
+
+__Poisson/log-linear__
+
+$$ \log\left(E[NH_i | JD_i, b_0, b_1]\right) = b_0 + b_1 JD_i $$
+
+or
+
+$$ E[NH_i | JD_i, b_0, b_1] = \exp\left(b_0 + b_1 JD_i\right) $$
+
+
+---
+
+## Multiplicative differences
+
+$$ E[NH_i | JD_i, b_0, b_1] = \exp\left(b_0 + b_1 JD_i\right) $$
+
+$$ E[NH_i | JD_i, b_0, b_1] = \exp\left(b_0 \right)\exp\left(b_1 JD_i\right) $$
+
+
+If $JD_i$ is increased by one unit, $E[NH_i | JD_i, b_0, b_1]$ is multiplied by $\exp\left(b_1\right)$
+
+
+## Poisson regression in R
+
+```{r poisReg, dependson="linReg",fig.height=4.5,fig.width=4.5, cache=TRUE}
+plot(
+  gaData$julian,
+  gaData$visits,
+  pch = 19,
+  col = "darkgrey",
+  xlab = "Julian",
+  ylab = "Visits"
+)
+
+glm1 <- glm(gaData$visits ~ gaData$julian, family = "poisson")
+summary(glm1)
+abline(lm1, col = "red", lwd = 3)
+lines(gaData$julian, glm1$fitted, col = "blue", lwd = 3)
+```
+
+
+## Mean-variance relationship?
+
+```{r, dependson="poisReg",fig.height=4.5,fig.width=4.5}
+plot(
+  glm1$fitted,
+  glm1$residuals,
+  pch = 19,
+  col = "grey",
+  ylab = "Residuals",
+  xlab = "Fitted"
+)
+```
+
+
+## Model agnostic standard errors 
+
+```{r agnostic}
+library(sandwich)
+confint.agnostic <- function (object, parm, level = 0.95, ...)
+{
+    cf <- coef(object); pnames <- names(cf)
+    if (missing(parm))
+        parm <- pnames
+    else if (is.numeric(parm))
+        parm <- pnames[parm]
+    a <- (1 - level)/2; a <- c(a, 1 - a)
+    pct <- stats:::format.perc(a, 3)
+    fac <- qnorm(a)
+    ci <- array(NA, dim = c(length(parm), 2L), dimnames = list(parm,
+                                                               pct))
+    ses <- sqrt(diag(sandwich::vcovHC(object)))[parm]
+    ci[] <- cf[parm] + ses %o% fac
+    ci
+}
+```
+[http://stackoverflow.com/questions/3817182/vcovhc-and-confidence-interval](http://stackoverflow.com/questions/3817182/vcovhc-and-confidence-interval)
+
+
+## Estimating confidence intervals
+
+```{r}
+confint(glm1)
+confint.agnostic(glm1)
+```
+
+
+## Rates 
+
+$$ E[NHSS_i | JD_i, b_0, b_1]/NH_i = \exp\left(b_0 + b_1 JD_i\right) $$
+
+$$ \log\left(E[NHSS_i | JD_i, b_0, b_1]\right) - \log(NH_i)  =  b_0 + b_1 JD_i $$
+
+
+$$ \log\left(E[NHSS_i | JD_i, b_0, b_1]\right) = \log(NH_i) + b_0 + b_1 JD_i $$
+
+
+## Fitting rates in R 
+
+```{r ratesFit,dependson="agnostic", cache=TRUE, fig.height=4, fig.width=4}
+glm2 <-
+  glm(
+    gaData$simplystats ~ julian(gaData$date),
+    offset = log(visits + 1),                   # with offset
+    family = "poisson",
+    data = gaData
+  )
+
+plot(
+  julian(gaData$date),
+  glm2$fitted,
+  col = "blue",
+  pch = 19,
+  xlab = "Date",
+  ylab = "Fitted Counts"
+)
+
+points(julian(gaData$date),
+       glm1$fitted,
+       col = "red",
+       pch = 19)
+
+```
+
+
+## Fitting rates in R 
+
+```{r,dependson="ratesFit",fig.height=4,fig.width=4}
+
+glm2 <-
+  glm(
+    gaData$simplystats ~ julian(gaData$date),
+    offset = log(visits + 1),
+    family = "poisson",
+    data = gaData
+  )
+
+plot(
+  julian(gaData$date),
+  gaData$simplystats / (gaData$visits + 1),
+  col = "grey",
+  xlab = "Date",
+  ylab = "Fitted Rates",
+  pch = 19
+)
+
+lines(
+  julian(gaData$date),
+  glm2$fitted / (gaData$visits + 1),
+  col = "blue",
+  lwd = 3
+)
+```
+
+
+## More information
+
+* [Log-linear models and multiway tables](http://ww2.coastal.edu/kingw/statistics/R-tutorials/loglin.html)
+* [Wikipedia on Poisson regression](http://en.wikipedia.org/wiki/Poisson_regression), [Wikipedia on overdispersion](http://en.wikipedia.org/wiki/Overdispersion)
+* [Regression models for count data in R](http://cran.r-project.org/web/packages/pscl/vignettes/countreg.pdf)
+* [pscl package](http://cran.r-project.org/web/packages/pscl/index.html) - the function _zeroinfl_ fits zero inflated models. 
+
+
+
