@@ -34,6 +34,31 @@ summary(npk.aovE)
 ## IGNORE_RDIFF_END
 options(op)  # reset to previous
 
+
+
+# exp =========================================================================
+# log computes logarithms, by default natural logarithms, log10 computes common (i.e., base 10) logarithms, and log2 computes binary (i.e., base 2) logarithms. The general form log(x, base) computes logarithms with base base.
+# 
+# log1p(x) computes log(1+x) accurately also for |x| << 1.
+# 
+# exp computes the exponential function.
+# 
+# expm1(x) computes exp(x) - 1 accurately also for |x| << 1.
+
+log(exp(3))
+log10(1e7) # = 7
+log10(100)
+
+exp(1)
+exp(2)
+2.71828^2
+2.71828^3
+exp(3)
+
+x <- 10^-(1+2*1:9)
+cbind(x, log(1+x), log1p(x), exp(x)-1, expm1(x))
+
+
 # ggpairs =====================================================================
 # Make a matrix of plots with a given data set
 

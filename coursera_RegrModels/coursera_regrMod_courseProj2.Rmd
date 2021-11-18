@@ -1,0 +1,89 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Executive Summary
+
+This report summarizes the relationship between MPG and transmission types in the mtcars dataset. The result of the statistical analysis using linear regression models is that a switch from automatic to manual transmission should lead to an **increase in miles per gallon**.  
+
+
+## Data: mtcars
+
+Change format of variable 'am' to factor and review structure of 'mtcars'. 
+
+```{r}
+library(data.table)
+library(tinytex)
+# tinytex::install_tinytex()
+attach(mtcars)
+mtcars <- as.data.table(mtcars)
+levels(mtcars$am)
+mtcars$am <- factor(mtcars$am, labels = c("auto", "man"))
+str(mtcars)
+```
+Transmission is represented by a factor variable 'am' where 0 stands for automatic and 1 represents manual.  
+
+
+\newpage
+## Scatterplots
+
+### Scatterplot mpg ~ disp
+
+```{r}
+plot(disp, mpg)
+abline(lm(mpg ~ disp))
+```
+\newpage
+### Scatterplot mpg ~ wt
+```{r}
+plot(wt, mpg)
+abline(lm(mpg ~ wt))
+```
+
+\newpage
+## Fit linear model with reasonable regressors
+
+Fit a model including all regressors that seem reasonable, i.e. are expected to have an effect on 'miles per gallon':  
+
+```{r fit model with reasonable regressors}
+fit_reas <- lm(mpg ~ disp + wt + am - 1)
+summary(fit_reas)
+```
+Switching from automatic to manual increases miles per gallons.  
+
+Extremely low **p-value** shows that result is **statistically significant**.  
+
+\newpage
+### Check Residuals' Plot
+
+```{r}
+par(mfrow = c(2,2))
+plot(fit_reas)
+```
+
+\newpage
+# Only 'am' as Regressor
+
+```{r only transmission as regressor}
+fit_am <- lm(mpg ~ am)
+summary(fit_am)
+```
+Result statistically significant as the p-value is far below 0.05.  
+Going from 'automatic' to 'manual' the **miles per gallons increases**.  
+
+\newpage
+### Check Residuals' Plot
+```{r}
+par(mfrow = c(2,2))
+plot(fit_reas)
+```
+
+# t-Test
+
+```{r}
+t.test(mpg ~ am, mtcars)
+```
+The difference between the means is statistically significant considering the low p-value. 
