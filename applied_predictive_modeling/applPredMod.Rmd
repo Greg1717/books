@@ -1,0 +1,426 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Part I General Strategies
+
+## 3 Data Pre-Processing
+
+### Computing
+
+There were fields that identified each cell (called Cell) and a factor vector that indicated which cells were well segmented (Class). The variable Case indicated which cells were originally used for the training and test sets.  The analysis in this chapter focused on the training set samples, so the data are filtered for these cells:
+
+```{r}
+apropos("matrix")
+RSiteSearch("confusion", restrict = "functions")
+
+library(AppliedPredictiveModeling)
+library(data.table)
+
+data(segmentationOriginal)
+segmentationOriginal
+str(segmentationOriginal)
+sapply(segmentationOriginal, class)
+segData <- as.data.table(segmentationOriginal)
+# filter on training data
+segData <- segData[Case == "Train"]
+CellID <- segData$Cell
+class <- segData$Class
+case <- segData$Case
+# Now remove the saved columns
+segData <- segData[, -(1:3)]
+# remove 'Status' columns
+statusColNum <- grep("Status", names(segData))
+statusColNum
+segData <- segData[, -..statusColNum]
+```
+
+
+#### Transformations
+
+```{r}
+# As previously discussed, some features exhibited significantly skewness. The skewness function in the e1071 package calculates the sample skewness statistic for each predictor:
+
+library(e1071)
+
+# For one predictor:
+skewness(segData$AngleCh1)
+
+# Since all the predictors are numeric columns, the apply function can be used to compute the skewness across columns.
+
+skewValues <- apply(segData, 2, skewness)
+head(skewValues)
+hist(segData$EqEllipseOblateVolCh1)
+
+# Using these values as a guide, the variables can be prioritized for visualizing the distribution.  The basic R function hist or the histogram function in the lattice can be used to assess the shape of the distribution. To determine which type of transformation should be used, the MASS package contains the boxcox function. Although this function estimates λ, it does not create the transformed variable(s).
+
+# A caret function, BoxCoxTrans, can find the appropriate transformation and apply them to the new data:
+
+library(caret)
+Ch1AreaTrans <- caret::BoxCoxTrans(segData$AreaCh1)
+Ch1AreaTrans
+ 
+# The original data
+head(segData$AreaCh1)
+
+# After transformation
+predict(Ch1AreaTrans, head(segData$AreaCh1))
+(819^(-.9) - 1)/(-.9)
+```
+
+Another caret function, **preProcess**, applies this transformation to a set of predictors. This function is discussed below. 
+
+The base R function **prcomp** can be used for PCA.  In the code below, the data are centered and scaled prior to **PCA**:
+
+```{r}
+pcaObject <- prcomp(segData, 
+                    center = TRUE, 
+                    scale. = TRUE)
+
+# Calculate the cumulative percentage of variance which each component accounts for.
+
+percentVariance <- pcaObject$sd^2/sum(pcaObject$sd^2)*100
+percentVariance[1:3]
+
+# The transformed values are stored in pcaObject as a sub-object called x:
+
+head(pcaObject$x[, 1:5])
+```
+
+The another sub-object called **rotation** stores the **variable loadings**, where rows correspond to predictor variables and columns are  associated with the components:
+
+```{r}
+head(pcaObject$rotation[, 1:3])
+```
+
+The caret package class spatialSign contains functionality for the **spatial sign transformation**. Although we will not apply this technique to these data, the basic syntax would be spatialSign(segData).  
+
+Also, these data do not have **missing values** for imputation. To impute missing values, the impute package has a function, **impute.knn**, that uses K-nearest neighbors to estimate the missing data. The previously mentioned preProcess function applies imputation methods based on K-nearest neighbors or bagged trees.  
+
+To administer a series of transformations to multiple data sets, the **caret class preProcess** has the ability to 
+
+ - transform, 
+ - center, 
+ - scale, or 
+ - impute values, as well as 
+ - apply the spatial sign transformation and 
+ - feature extraction. 
+
+The function calculates the required quantities for the transformation. After calling the preProcess function, the predict method applies the results to a set of data. For example, to Box–Cox transform, center, and scale the data, then execute PCA for signal extraction, the syntax would be:
+
+```{r}
+trans <- 
+        caret::preProcess(segData, 
+                          method = c("BoxCox", "center", "scale", "pca"))
+trans
+trans$dim
+trans$rotation
+
+# Apply the transformations:
+transformed <- predict(trans, segData)
+
+# These values are different than the previous PCA components since they were transformed prior to PCA
+head(transformed[, 1:5])
+```
+
+The **order** in which the possible transformation are applied is: 
+ 
+ - transformation, 
+ - centering, 
+ - scaling, 
+ - imputation, 
+ - feature extraction, and then 
+ - spatial sign.  
+ 
+Many of the modeling functions have options to center and scale prior to modeling.  For example, when using the train function (discussed in later chapters), there is an option to use preProcess prior to modeling within the resampling iterations.
+
+
+#### Filtering
+
+To filter for **near-zero variance predictors**, the caret package function **nearZeroVar** will return the column numbers of any predictors that fulfill the conditions outlined in Sect. 3.5. For the cell segmentation data, there are no problematic predictors:
+
+```{r}
+nearZeroVar(segData)
+
+# When predictors should be removed, a vector of integers is returned that indicates which columns should be removed.
+
+# Similarly, to filter on between-predictor correlations, the cor function can calculate the correlations between predictor variables:
+
+correlations <- cor(segData)
+dim(correlations)
+correlations[1:4, 1:4]
+str(correlations)
+```
+
+
+##### corrplot()
+
+To visually examine the correlation structure of the data, the corrplot pack-
+age contains an excellent function of the same name. The function has many
+options including one that will reorder the variables in a way that reveals
+clusters of highly correlated predictors.
+
+```{r}
+library(corrplot)
+corrplot(correlations, order = "hclust")
+```
+
+The size and color of the points are associated with the strength of correlation
+between two predictor variables.
+To filter based on correlations, the **findCorrelation** function will apply the
+algorithm in Sect. 3.5. For a given threshold of pairwise correlations, the func-
+tion returns column numbers denoting the predictors that are recommended
+for deletion:
+
+```{r}
+highCorr <- findCorrelation(correlations, cutoff = .75)
+length(highCorr)
+head(highCorr)
+filteredSegData <- segData[, -highCorr]
+```
+
+
+#### Creating Dummy Variables
+
+Several methods exist for creating dummy variables based on a particular model. Section 4.9 discusses different methods for specifying how the predictors enter into the model. One approach, the formula method, allows great flexibility to create the model function. Using formulas in model functions parameterizes the predictors such that not all categories have dummy variables. This approach will be shown in greater detail for linear regression. As previously mentioned, there are occasions when a complete set of dummy variables is useful. For example, the splits in a tree-based model are more interpretable when the dummy variables encode all the information for that predictor. We recommend using the full set if dummy variables when working with tree-based models.  
+
+Example dummyVars:
+
+```{r}
+
+when <- data.frame(time = c("afternoon", "night", "afternoon",
+                            "morning", "morning", "morning",
+                            "morning", "afternoon", "afternoon"),
+                   day = c("Mon", "Mon", "Mon",
+                           "Wed", "Wed", "Fri",
+                           "Sat", "Sat", "Fri"),
+                           stringsAsFactors = TRUE)
+
+when
+
+levels(when$time) <- list(morning="morning",
+                          afternoon="afternoon",
+                          night="night")
+when
+
+levels(when$day) <- list(Mon="Mon", Tue="Tue", Wed="Wed", Thu="Thu",
+                         Fri="Fri", Sat="Sat", Sun="Sun")
+
+## Default behavior:
+model.matrix(~day, when)
+
+mainEffects <- dummyVars(~ day + time, data = when)
+mainEffects
+predict(mainEffects, when[1:3,])
+
+when2 <- when
+when2[1, 1] <- NA
+when2
+when2[1:3,]
+predict(mainEffects, when2[1:3,])
+predict(mainEffects, when2[1:3,], na.action = na.omit)
+
+
+interactionModel <- dummyVars(~ day + time + day:time,
+                              data = when,
+                              sep = ".")
+
+predict(interactionModel, when[1:3,])
+
+noNames <- dummyVars(~ day + time + day:time,
+                     data = when,
+                     levelsOnly = TRUE)
+predict(noNames, when)
+
+head(class2ind(iris$Species))
+
+two_levels <- factor(rep(letters[1:2], each = 5))
+class2ind(two_levels)
+class2ind(two_levels, drop2nd = TRUE)
+```
+
+
+### Exercises
+
+#### 3.1. The UC Irvine Machine Learning Repository6 contains a data set related
+to glass identification. The data consist of 214 glass samples labeled as one
+of seven class categories. There are nine predictors, including the refractive
+index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe.
+The data can be accessed via:
+```{r}
+library(mlbench)
+data(Glass)
+str(Glass)
+head(Glass)
+```
+
+(a) Using visualizations, **explore** the predictor variables to understand their
+distributions as well as the relationships between predictors.
+
+```{r}
+library(reshape2)
+meltedGlass <- melt(Glass, id.vars = "Type")
+head(meltedGlass)
+# Now, we can use the lattice function densityplot to look at each predictor:
+library(lattice)
+
+densityplot(~value|variable,
+            data = meltedGlass,
+            ## Adjust each axis so that the measurement scale is
+            ## different for each panel
+            scales = list(x = list(relation = "free"),
+                          y = list(relation = "free")),
+            ## 'adjust' smooths the curve out
+            adjust = 1.25,
+            ## change the symbol on the rug for each data point
+            pch = "|",
+            xlab = "Predictor")
+```
+We can see that K and Mg appear to have possible second modes around zero and that several predictors (Ca, Ba, Fe and RI) show signs of skewness. There may be one or two outliers in K, but they could simply be due to natueral skewness. Also, predictors Ca, RI, Na and Si have concentrations of samples in the middle of the scale and a small number of data points at the edges of the distribution. This characteristic is indicative of a “heavy–tailed” distribution.
+
+A scatterplot matrix can also be helpful to visualize a data set of this size. 
+
+```{r}
+pairs(Glass)
+```
+
+```{r}
+library(GGally)
+ggpairs(Glass)
+```
+
+This visualization highlights several other important characteristics of this data:
+
+1. The **measurements** of some glass types, specifically Fe, Ba, K and Mg, are **zero**. This creates a “mixture distribution” of points; one distribution consists of glass types containing the element in question whereas the other does not. This finding implies that the samples in these distributions may not behave in the same manner.
+2. Most predictors are uncorrelated with the exception of pairs Ca/RI and Ca/Na.
+3. Many of the pair–wise combinations have very non–standard distributions (i.e. heavy tails or mixtures of distributions).
+4. It is difficult to tell if the extreme point in the K data is an outlier or just a artifact of a skewed distribution that has not been sampled enough. In either case, this should be accounted for through the modeling, preferably by using models that are resistant to outliers.
+
+```{r}
+library(corrplot)
+Glass_cor <- cor(Glass[, 1:9])
+corrplot(Glass_cor, order = "hclust")
+```
+
+Would **transformations** help these data? Based on our findings above, we need to investigate
+transformations of individual predictors that will resolve skewness and/or outliers (e.g. the spatial sign transformation).
+For skewness, first note that several predictors have values of zero. This excludes transformations such as the log transformation or the Box–Cox family of transformations. When we are faced with predictors containing zero values, the Yeo–Johnson family of transformations can be helpful2 (Yeo & Johnson 2000). This family of transformations is very similar to the Box–Cox transformation, but can handle zero or negative predictor values. The transformation can be estimated using caret’s preProcess function:
+```{r}
+library(caret)
+yjTrans <- caret::preProcess(Glass[, -10], method = "YeoJohnson")
+yjTrans
+yjData <- predict(yjTrans, newdata= Glass[, -10])
+yjData
+melted <- melt(yjData)
+melted
+```
+
+The resulting density plots are shown in Figure 3. The only substantive change relative to the original distributions is that a second mode was induced for predictors Ba and Fe. Given these results, this transformation did not seem to improve the data (in terms of skewness). Next, we will apply the **spatial sign** transformation to attempt to mitigate outliers. For this data, we first center and scale the data, then apply the transformation:
+```{r}
+centerScale <- caret::preProcess(Glass[, -10], method = c("center", "scale"))
+centerScale
+csData <- predict(centerScale, newdata = Glass[, -10])
+csData
+ssData <- caret::spatialSign(csData)
+ssData
+
+lattice::splom(~ssData, pch = 16, col = rgb(.2, .2, .2, .4), cex = .7)
+```
+
+Many of the possible outliers have been contracted into the mainstream of the data. This transformation did result in at least one new pattern: the samples with zero values for both Fe and B are now projected onto a straight line in these two dimensions. While we were unable to resolve skewness in this data via transformations, we were able to minimize the number of unusually extreme observations. Note that attempts to pre–process data to resolve predictor distribution problems are not always successful. Our best efforts in pre–processing may not yield highly desirable transformed values. Under these kinds of circumstances, we will need to use models that are not unduly affected by skewed distributions (e.g. tree–based methods).
+
+
+(b) Do there appear to be any **outliers** in the data? Are any predictors **skewed**?
+```{r}
+
+```
+
+(c) Are there any relevant transformations of one or more predictors that might improve the classification model?
+```{r}
+
+```
+
+
+
+
+
+#### 3.2. The soybean data can also be found at the UC Irvine Machine Learning
+Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes.
+
+The data can be loaded via:
+```{r}
+library(mlbench)
+data(Soybean)
+Soybean
+```
+
+See ?Soybean for details
+(a) Investigate the frequency distributions for the categorical predictors. Are
+any of the distributions degenerate in the ways discussed earlier in this
+chapter?
+(b) Roughly 18 % of the data are missing. Are there particular predictors that
+are more likely to be missing? Is the pattern of missing data related to
+the classes?
+(c) Develop a strategy for handling missing data, either by eliminating
+predictors or imputation.
+
+#### 3.3. Chapter 5 introduces Quantitative Structure-Activity Relationship
+(QSAR) modeling where the characteristics of a chemical compound are used
+to predict other chemical properties. The caret package contains a QSAR
+data set from Mente and Lombardo (2005). Here, the ability of a chemical
+to permeate the blood-brain barrier was experimentally determined for 208
+compounds. 134 descriptors were measured for each compound.
+(a) Start R and use these commands to load the data:
+> library(caret)
+> data(BloodBrain)
+> # use ?BloodBrain to see more details
+The numeric outcome is contained in the vector logBBB while the predic-
+tors are in the data frame bbbDescr.
+(b) Do any of the individual predictors have degenerate distributions?
+(c) Generally speaking, are there strong relationships between the predic-
+tor data? If so, how could correlations in the predictor set be reduced?
+Does this have a dramatic effect on the number of predictors available for
+modeling?
+
+
+
+
+
+
+
+
+
+
+
+## 4 Over-Fitting and Model Tuning
+### Computing
+### Exercises
+
+# Part II Regression Models
+## 5 Measuring Performance in Regression Models
+## 6 Linear Regression and Its Cousins
+## 7 Nonlinear Regression Models
+## 8 Regression Trees and Rule-Based Models
+## 9 A Summary of Solubility Models
+## 10 Case Study: Compressive Strength of Concrete Mixtures
+
+# Part III Classification Models
+## 11 Measuring Performance in Classification Models
+## 12 Discriminant Analysis and Other Linear Classification Models
+## 13 Nonlinear Classification Models
+## 14 Classification Trees and Rule-Based Models
+## 15 A Summary of Grant Application Models 
+## 16 Remedies for Severe Class Imbalance
+## 17 Case Study: Job Scheduling
+
+# Part IV Other Considerations
+## 18 Measuring Predictor Importance
+## 19 An Introduction to Feature Selection
+## 20 Factors That Can Affect Model Performance
+
+
+
