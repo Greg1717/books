@@ -12,16 +12,16 @@ url <- "https://www.statslectures.com"
 # LungCapData <- read.table(file="http://tiny.cc/econ226/data/LungCapData.txt", header = T, sep = "\t")
 # write.csv(x = LungCapData, file = "data/LungCapData.csv", row.names = F)
 # remove(LungCapData)
-LungCapData <- read.csv(file = "data/LungCapData.csv")
+getwd()
+LungCapData <- read.csv(file = "./marin_stats/data/LungCapData2.csv")
 head(LungCapData)
-
+summary(LungCapData)
 # explore relationship between height and age
 help(plot)
 
 # Pearson's correlation
 attach(LungCapData)
 cor(Age, Height)
-
 # => fairly strong linear association
 
 plot(

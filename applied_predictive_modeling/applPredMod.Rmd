@@ -2,7 +2,7 @@
 title: "R Notebook"
 output: html_notebook
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 
@@ -15,6 +15,7 @@ editor_options:
 There were fields that identified each cell (called Cell) and a factor vector that indicated which cells were well segmented (Class). The variable Case indicated which cells were originally used for the training and test sets.  The analysis in this chapter focused on the training set samples, so the data are filtered for these cells:
 
 ```{r}
+?apropos
 apropos("matrix")
 RSiteSearch("confusion", restrict = "functions")
 
@@ -54,6 +55,8 @@ skewness(segData$AngleCh1)
 
 skewValues <- apply(segData, 2, skewness)
 head(skewValues)
+str(skewValues)
+skewValues["EqEllipseOblateVolCh1"]
 hist(segData$EqEllipseOblateVolCh1)
 
 # Using these values as a guide, the variables can be prioritized for visualizing the distribution.  The basic R function hist or the histogram function in the lattice can be used to assess the shape of the distribution. To determine which type of transformation should be used, the MASS package contains the boxcox function. Although this function estimates λ, it does not create the transformed variable(s).
@@ -61,6 +64,8 @@ hist(segData$EqEllipseOblateVolCh1)
 # A caret function, BoxCoxTrans, can find the appropriate transformation and apply them to the new data:
 
 library(caret)
+# use histogram to review skewness
+hist(segData$AreaCh1)
 Ch1AreaTrans <- caret::BoxCoxTrans(segData$AreaCh1)
 Ch1AreaTrans
  
@@ -69,6 +74,8 @@ head(segData$AreaCh1)
 
 # After transformation
 predict(Ch1AreaTrans, head(segData$AreaCh1))
+# check with histogram if skewness has been reduced
+hist(predict(Ch1AreaTrans, segData$AreaCh1))
 (819^(-.9) - 1)/(-.9)
 ```
 
@@ -77,17 +84,18 @@ Another caret function, **preProcess**, applies this transformation to a set of 
 The base R function **prcomp** can be used for PCA.  In the code below, the data are centered and scaled prior to **PCA**:
 
 ```{r}
-pcaObject <- prcomp(segData, 
+pcaObject <- stats::prcomp(segData, 
                     center = TRUE, 
                     scale. = TRUE)
 
-# Calculate the cumulative percentage of variance which each component accounts for.
+# review created object
+pcaObject
 
+# Calculate the cumulative percentage of variance which each component accounts for.
 percentVariance <- pcaObject$sd^2/sum(pcaObject$sd^2)*100
 percentVariance[1:3]
 
 # The transformed values are stored in pcaObject as a sub-object called x:
-
 head(pcaObject$x[, 1:5])
 ```
 
@@ -97,7 +105,7 @@ The another sub-object called **rotation** stores the **variable loadings**, whe
 head(pcaObject$rotation[, 1:3])
 ```
 
-The caret package class spatialSign contains functionality for the **spatial sign transformation**. Although we will not apply this technique to these data, the basic syntax would be spatialSign(segData).  
+The caret package class spatialSign contains functionality for the **spatial sign transformation**. Although we will not apply this technique to these data, the basic syntax would be spatialSign(segData).
 
 Also, these data do not have **missing values** for imputation. To impute missing values, the impute package has a function, **impute.knn**, that uses K-nearest neighbors to estimate the missing data. The previously mentioned preProcess function applies imputation methods based on K-nearest neighbors or bagged trees.  
 
@@ -110,12 +118,11 @@ To administer a series of transformations to multiple data sets, the **caret cla
  - apply the spatial sign transformation and 
  - feature extraction. 
 
-The function calculates the required quantities for the transformation. After calling the preProcess function, the predict method applies the results to a set of data. For example, to Box–Cox transform, center, and scale the data, then execute PCA for signal extraction, the syntax would be:
+The function calculates the required quantities for the transformation. After calling the **preProcess** function, the **predict** method applies the results to a set of data. For example, to Box–Cox transform, center, and scale the data, then execute PCA for signal extraction, the syntax would be:
 
 ```{r}
-trans <- 
-        caret::preProcess(segData, 
-                          method = c("BoxCox", "center", "scale", "pca"))
+trans <-
+  caret::preProcess(segData, method = c("BoxCox", "center", "scale", "pca"))
 trans
 trans$dim
 trans$rotation
@@ -125,11 +132,12 @@ transformed <- predict(trans, segData)
 
 # These values are different than the previous PCA components since they were transformed prior to PCA
 head(transformed[, 1:5])
+transformed
 ```
 
 The **order** in which the possible transformation are applied is: 
  
- - transformation, 
+ - transformation (remove skewness), 
  - centering, 
  - scaling, 
  - imputation, 
@@ -150,7 +158,7 @@ nearZeroVar(segData)
 
 # Similarly, to filter on between-predictor correlations, the cor function can calculate the correlations between predictor variables:
 
-correlations <- cor(segData)
+correlations <- stats::cor(segData)
 dim(correlations)
 correlations[1:4, 1:4]
 str(correlations)
@@ -172,15 +180,15 @@ corrplot(correlations, order = "hclust")
 The size and color of the points are associated with the strength of correlation
 between two predictor variables.
 To filter based on correlations, the **findCorrelation** function will apply the
-algorithm in Sect. 3.5. For a given threshold of pairwise correlations, the func-
-tion returns column numbers denoting the predictors that are recommended
+algorithm in Sect. 3.5. For a given threshold of pairwise correlations, the 
+function returns column numbers denoting the predictors that are recommended
 for deletion:
 
 ```{r}
 highCorr <- findCorrelation(correlations, cutoff = .75)
 length(highCorr)
 head(highCorr)
-filteredSegData <- segData[, -highCorr]
+filteredSegData <- segData[, -..highCorr]
 ```
 
 
@@ -248,7 +256,7 @@ class2ind(two_levels, drop2nd = TRUE)
 
 #### 3.1. 
 
-The UC Irvine Machine Learning Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe. The data can be accessed via:
+The UC Irvine Machine Learning Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe. 
 
 (a) Using visualizations, **explore** the predictor variables to understand their
 distributions as well as the relationships between predictors.  
@@ -268,25 +276,26 @@ head(Glass)
 
 ```{r}
 library(reshape2)
+table(Glass$Type)
 meltedGlass <- melt(Glass, id.vars = "Type")
 head(meltedGlass)
 
-# Now, we can use the lattice function densityplot to look at each predictor:
+# Now, we can use the lattice function densityplot() to look at each predictor:
 library(lattice)
-
 lattice::densityplot(~value|variable,
-            data = meltedGlass,
-            ## Adjust each axis so that the measurement scale is
-            ## different for each panel
-            scales = list(x = list(relation = "free"),
-                          y = list(relation = "free")),
-            ## 'adjust' smooths the curve out
-            adjust = 1.25,
-            ## change the symbol on the rug for each data point
-            pch = "|",
-            xlab = "Predictor")
+                     data = meltedGlass,
+                     ## Adjust each axis so that the measurement scale is
+                     ## different for each panel
+                     scales = list(x = list(relation = "free"),
+                                   y = list(relation = "free")),
+                     ## 'adjust' smooths the curve out
+                     adjust = 1.25,
+                     ## change the symbol on the rug for each data point
+                     pch = "|",
+                     xlab = "Predictor")
 ```
-We can see that K and Mg appear to have possible **second modes around zero** and that several predictors (Ca, Ba, Fe and RI) show signs of **skewness**. There may be one or two **outliers** in K, but they could simply be due to natueral skewness. Also, predictors Ca, RI, Na and Si have concentrations of samples in the middle of the scale and a small number of data points at the edges of the distribution. This characteristic is indicative of a **heavy–tailed distribution**.
+
+We can see that K and Mg appear to have possible **second modes around zero** and that several predictors (Ca, Ba, Fe and RI) show signs of **skewness**. There may be one or two **outliers** in K, but they could simply be due to natural skewness. Also, predictors Ca, RI, Na and Si have concentrations of samples in the middle of the scale and a small number of data points at the edges of the distribution. This characteristic is indicative of a **heavy–tailed distribution**.
 
 A scatterplot matrix can also be helpful to visualize a data set of this size. 
 
@@ -310,12 +319,14 @@ This visualization highlights several other important characteristics of this da
 
 Another nice visualization of correlations:
 ```{r}
+Glass_cor <- stats::cor(Glass[, 1:9])
+Glass_cor
 library(corrplot)
-Glass_cor <- cor(Glass[, 1:9])
 ?corrplot
 corrplot(Glass_cor, order = "hclust")
 corrplot(Glass_cor, method = c("number"), order = "hclust")
 ```
+
 
 
 ##### Skewness & Outliers
@@ -330,7 +341,7 @@ For skewness, first note that several predictors have **values of zero**. This e
 library(caret)
 yjTrans <- caret::preProcess(Glass[, -10], method = "YeoJohnson")
 yjTrans
-yjData <- predict(yjTrans, newdata = Glass[, -10])
+yjData <- stats::predict(yjTrans, newdata = Glass[, -10])
 yjData
 melted <- melt(yjData)
 melted
@@ -343,29 +354,22 @@ Next, we will apply the **spatial sign** transformation to attempt to **mitigate
 ```{r}
 centerScale <- caret::preProcess(Glass[, -10], method = c("center", "scale"))
 centerScale
+
 csData <- predict(centerScale, newdata = Glass[, -10])
-csData
+head(csData)
+
 ssData <- caret::spatialSign(csData)
 ssData
 
-lattice::splom(~ssData, pch = 16, col = rgb(.2, .2, .2, .4), cex = .7)
+lattice::splom( ~ ssData,
+                pch = 16,
+                col = rgb(.2, .2, .2, .4),
+                cex = .7)
 ```
-
 
 Many of the possible outliers have been contracted into the mainstream of the data. This transformation did result in at least one new pattern: the samples with **zero values** for both Fe and B are now projected onto a straight line in these two dimensions. While we were unable to resolve skewness in this data via transformations, we were able to minimize the number of unusually extreme observations. 
 
 Note that attempts to pre–process data to resolve predictor distribution problems are not always successful. Our best efforts in pre–processing may not yield highly desirable transformed values. Under these kinds of circumstances, we will need to use models that are not unduly affected by skewed distributions (e.g. tree–based methods).
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
 
 
 
@@ -384,8 +388,6 @@ table(Soybean$Class)
 str(Soybean)
 ```
 
-See ?Soybean for details
-
 (a) Investigate the **frequency distributions for the categorical predictors**. Are any of the distributions degenerate in the ways discussed earlier in this chapter?
 
 (b) Roughly 18 % of the data are **missing**. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?
@@ -398,9 +400,6 @@ See ?Soybean for details
 ```{r}
 Soybean2 <- Soybean
 table(Soybean2$temp, useNA = "always")
-```
-
-```{r}
 # alternative method
 library(car)
 Soybean2$temp <- car::recode(Soybean2$temp,
@@ -412,6 +411,7 @@ Soybean2$temp <- car::recode(Soybean2$temp,
 
 table(Soybean2$temp)
 ```
+
 For this part of the solution to this problem, we will look at the relationship between the months, temperature and precipitation. To explore these relationships, we need to recode months and precipitation. 
 
 ```{r}
@@ -421,9 +421,7 @@ Soybean2$date <-
               "0 ='apr';1='may';2='june';3='july';4='aug';5='sept';6='oct';NA = 'missing'",
               levels = c("apr", "may", "june", "july", "aug", "sept", "missing"))
 table(Soybean2$date)
-```
 
-```{r}
 table(Soybean2$precip, useNA = "always")
 
 Soybean2$precip <- car::recode(Soybean2$precip, 
@@ -431,6 +429,7 @@ Soybean2$precip <- car::recode(Soybean2$precip,
                                levels = c("low", "norm", "high", "missing"))
 table(Soybean2$precip)
 ```
+
 To start, let’s look at the date predictor. Are the months represented equally? From the table
 above, we can see that June through September have the most data and that there is a single
 missing value. For precipitation (ironically) most of the data are above average. In addition, the
@@ -439,20 +438,12 @@ temperature and precipitation columns have missing value rates of about 5%.
 
 ##### vcd::mosaic()
 
-Like the previous problems, we should examine the pair-wise or joint distributions of these predic-
-tors. Joint distributions of factor predictors are often displayed in a contingency table. There are
-also several ways that these distributions can be displayed in a graph. The mosaic function in the
-vcd package (Meyer, Zeileis & Hornik 2006) and the barchart function in the lattice package are
-two options. What does the joint distribution of temperature and month look like? First, we will
-use a mosaic plot:
+Like the previous problems, we should examine the pair-wise or joint distributions of these predictors. Joint distributions of factor predictors are often displayed in a contingency table. There are also several ways that these distributions can be displayed in a graph. The mosaic function in the vcd package (Meyer, Zeileis & Hornik 2006) and the barchart function in the lattice package are two options. What does the joint distribution of temperature and month look like? First, we will use a mosaic plot:
 
 ```{r}
 library(vcd)
 ## mosaic() can table a table or a formula:
 vcd::mosaic(~date + temp, data = Soybean2)
-```
-
-```{r}
 table(Soybean2$date, Soybean2$temp)
 ```
 
@@ -464,26 +455,26 @@ Alternatively, a bar chart can also be used:
 lattice::barchart(table(Soybean2$date, Soybean2$temp),
                   auto.key = list(columns = 4, title = "temperature"))
 ```
-The results are shown in Figure 5. Note that in the bar chart, the bars are not cumulative (i.e.
-missing values are not the most frequent). Here we see which months are the most frequent.
-Additionally, we see that average temperatures are the most frequent category within each month,
-although high temperatures are also very likely in September. Missing values are most likely in
-July. One useful option to barchart is stack to create stacked bars.
-To investigate higher–order relationships, predictors can be added to the table or formula to create
-more complex visualizations (e.g. panels in the lattice plots, etc).
-What does the distribution look like per response class for the missing data? If we look at the
-frequency of any missing predictor value per class, the results show that some classes are more
-problematic than others:
+
+The results are shown in Figure 5. Note that in the bar chart, the bars are not cumulative (i.e. missing values are not the most frequent). Here we see which months are the most frequent.
+
+Additionally, we see that average temperatures are the most frequent category within each month, although high temperatures are also very likely in September. Missing values are most likely in July. One useful option to barchart is stack to create stacked bars.
+
+To investigate higher–order relationships, predictors can be added to the table or formula to create more complex visualizations (e.g. panels in the lattice plots, etc).
+
+What does the distribution look like per response class for the missing data? If we look at the frequency of any missing predictor value per class, the results show that some classes are more problematic than others:
 
 ```{r}
 table(Soybean$Class, complete.cases(Soybean))
 ```
+
 ```{r}
 hasMissing <- unlist(lapply(Soybean, function(x) any(is.na(x))))
 hasMissing
 hasMissing <- names(hasMissing)[hasMissing]
 head(hasMissing)
 ```
+
 There are several classes where all of the samples have at least one missing predictor value. Are
 these concentrated in a single predictor that we could remove? We can get the percentage of missing
 values for each predictor by class using the following syntax:
@@ -513,14 +504,12 @@ pattern of missing data.
 
 One approach to handling missing data is to use an imputation technique. However, it is unlikely
 that imputation will help since almost 100% of the predictor values will need to be imputed in a
-few cases. We could encode the missing as another level or eliminate the classes associated with
-the high rate of missing values from the data altogether.
+few cases. We could encode the missing as another level or **eliminate** the classes associated with the high rate of missing values from the data altogether.
 
 ##### caret::dummyVars
 
 How would the frequencies of the predictor values affect the modeling process? If we are using a
-model that is sensitive to sparsity then the low rate of some of the factor levels might be an issue.
-We can convert the factors to a set of **dummy variables** and see how good or bad the sparsity is.
+model that is sensitive to sparsity then the low rate of some of the factor levels might be an issue. We can convert the factors to a set of **dummy variables** and see how good or bad the sparsity is.
 ```{r}
 ## Some of the factors are ordinal. First convert them to unordered factors so
 ## that we get a set of binary indicators.
@@ -532,21 +521,23 @@ orderedVars
 ## Let's bypass the problem of missing data by removing the offending classes
 
 completeClasses <- as.character(unique(Soybean$Class[complete.cases(Soybean)]))
-
+completeClasses
 Soybean3 <- subset(Soybean, Class %in% completeClasses)
 
 for(i in orderedVars) Soybean3[, i] <- factor(as.character(Soybean3[, i]))
-
+Soybean3
 ## Use dummyVars to generate the binary predictors...
 library(caret)
 dummyInfo <- caret::dummyVars(Class ~ ., data = Soybean3)
-
+dummyInfo
 dummyInfo$vars
 
-dummies <- predict(dummyInfo, Soybean3)
+dummies <- stats::predict(dummyInfo, Soybean3)
 head(dummies[1:4,1:14])
 ```
+
 ... then nearZeroVar to figure out which should be removed.
+
 ```{r}
 predDistInfo <- caret::nearZeroVar(dummies, saveMetrics = TRUE)
 head(predDistInfo)
@@ -558,11 +549,10 @@ The number and percentage of predictors to remove:
 sum(predDistInfo$nzv)
 mean(predDistInfo$nzv)
 ```
+
 So if we wanted to remove sparse and unbalanced predictors, 16.2% of the dummy variables would
 be eliminated. One way around this is to use models that are not sensitive to this characteristic,
-such as tree– or rule–based models, or na¨ıve Bayes.
-
-
+such as tree– or rule–based models, or naive Bayes.
 
 
 
@@ -587,10 +577,12 @@ Solutions
 For these data, the first assessment looks for **sparse and unbalanced predictors**. The caret nearZeroVar function is used again but this time with the saveMetrics options that retains information about each predictor:
 
 ```{r}
-predictorInfo <- nearZeroVar(bbbDescr, saveMetrics = TRUE)
+predictorInfo <- caret::nearZeroVar(bbbDescr, saveMetrics = TRUE)
 head(predictorInfo)
 ```
+
 Are there any near-zero variance predictors?
+
 ```{r}
 rownames(predictorInfo)[predictorInfo$nzv]
 ```
@@ -601,8 +593,8 @@ table(bbbDescr$alert)
 ## Let's get rid of these:
 filter1 <- bbbDescr[, !predictorInfo$nzv]
 ncol(filter1)
-
 ```
+
 As mentioned in the text, there are some models that are resistant to near–zero variance predictors and, for these models, we would most likely leave them in. 
 
 What about the distributions of the remaining predictors? Although, it is time consuming to look at individual density plots of 127 predictors, we do recommend it (or at least looking at a sample of predictors). For example, the top panel of Figure 6 shows a random sample of eight predictors:
@@ -612,6 +604,7 @@ set.seed(532)
 sampled1 <- filter1[, sample(1:ncol(filter1), 8)]
 names(sampled1)
 ```
+
 A few of these predictors exhibit skewness and one (frac.cation7.) shows two distinct modes.
 Based on the rug plot of points in the panel for o sp2, these data are also likely to be bimodal.
 To numerically assess skewness, the function from the e1071 package is used again:
@@ -619,19 +612,22 @@ To numerically assess skewness, the function from the e1071 package is used agai
 ```{r}
 library(e1071)
 skew <- apply(filter1, 2, e1071::skewness)
+skew
 summary(skew)
 ```
-There are a number of predictors that are left– or right–skewed. We can again apply the Yeo–
-Johnson transformation to the data (some of the predictors are negative):
-```{r}
-yjBBB <- preProcess(filter1, method = "YeoJohnson")
 
-transformed <- predict(yjBBB, newdata = filter1)
+There are a number of predictors that are left– or right–skewed. We can again apply the Yeo–Johnson transformation to the data (some of the predictors are negative):
+
+```{r}
+yjBBB <- caret::preProcess(filter1, method = "YeoJohnson")
+
+transformed <- stats::predict(yjBBB, newdata = filter1)
 
 sampled2 <- transformed[, names(sampled1)]
 
 sampled2
 ```
+
 The results for the sampled predictors are shown in the bottom panel of Figure 6. Although the distributions for fpsa3 and wpsa2 are more symmetric, the other predictors have either **additional modes** or more pronounced modes. One option would be to manually assess which predictors would benefit from this type of transformation.
 
 Is there severe **correlation** between the predictors? Based on previous experience with these types of data, there are likely to be many relationships between predictors. For example, when we examine the predictor names we find that 24 are some type of surface area predictor. These are most likely **correlated** to some extent. Also, surface area is usually related to the size (or weight) of a molecule, so additional correlations may exist. 
@@ -654,6 +650,7 @@ library(corrplot)
 ## plot the matrix with no labels or grid
 corrplot(rawCorr, order = "hclust", addgrid.col = NA, tl.pos = "n")
 ```
+
 ```{r}
 corrplot(transCorr, order = "hclust", addgrid.col = NA, tl.pos = "n")
 ```
@@ -663,25 +660,22 @@ ssData <- spatialSign(scale(filter1))
 ssCorr <- cor(ssData)
 corrplot(ssCorr, order = "hclust", addgrid.col = NA, tl.pos = "n")
 ```
+
 This visualization indicates that correlations lessen with increasing levels of transformations:
+
 ```{r}
 corrInfo <- function(x) summary(x[upper.tri(x)])
 corrInfo(rawCorr)
-```
-
-```{r}
 corrInfo(transCorr)
-```
-
-```{r}
 corrInfo(ssCorr)
 ```
+
 Rather than transform the data to resolve between–predictor correlations, it may be a better idea to remove predictors. The caret function **findCorrelation** was described in the text. The user is required to state what level of pair–wise correlations that they are willing to accept. The code below shows (for these data) the trade–off between the correlation threshold, the number of retained predictors, and the average absolute correlation in the data. Figure 8 shows the results.
+
 ```{r}
 thresholds <- seq(.25, .95, by = 0.05)
 size <- meanCorr <- rep(NA, length(thresholds))
 removals <- vector(mode = "list", length = length(thresholds))
-
 
 for (i in seq_along(thresholds)) {
   removals[[i]] <- findCorrelation(rawCorr, thresholds[i])
@@ -705,18 +699,17 @@ corrData
 ```{r}
 caret::findCorrelation(rawCorr, cutoff = 0.98, names = T)
 ```
-We can also try the subselect package (Cerdeira, Silva, Cadima & Minhoto 2014) to remove predic-
-tors. This package uses a different criterion to evaluate the quality of a subset and has less greedy
-methods to search the predictor space. First, we have to remove all linear dependencies from the
-data. That includes perfect pair–wise correlations as well as relationships between three or more
-predictors. The trim.matrix function does that:
+
+We can also try the subselect package (Cerdeira, Silva, Cadima & Minhoto 2014) to remove predictors. This package uses a different criterion to evaluate the quality of a subset and has less greedy methods to search the predictor space. First, we have to remove all linear dependencies from the data. That includes perfect pair–wise correlations as well as relationships between three or more predictors. The trim.matrix function does that:
 ```{r}
 library(subselect)
 ncol(rawCorr)
 trimmed <- trim.matrix(rawCorr, tolval=1000*.Machine$double.eps)$trimmedmat
 ncol(trimmed)
 ```
+
 We can use simulated annealing and genetic algorithms to search for quality subsets. These techniques allow for lower and upper limits for the number of predictors. However, the functions get dramatically slower as the range increases. Here, we will look at one solution found by findCorrelation and, will subsequently use subselect to search within that subset size:
+
 ```{r}
 set.seed(702)
 
