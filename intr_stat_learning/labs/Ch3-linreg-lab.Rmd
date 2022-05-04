@@ -12,6 +12,8 @@ jupyter:
     display_name: R
     language: R
     name: ir
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -152,6 +154,7 @@ fit using the `residuals()` function. The function
 can use this function to plot the residuals against the fitted values.
 
 ```{r chunk12}
+par(mfrow = c(1,1))
 plot(predict(lm.fit), residuals(lm.fit))
 plot(predict(lm.fit), rstudent(lm.fit))
 ```
@@ -255,8 +258,7 @@ plot(lm.fit2)
 
  then we see that when the `lstat^2` term is included in the model, there is little discernible pattern in the residuals.
 
-In order to create a cubic fit, we can include a predictor of the form `I(X^3)`. However, this approach can start to get cumbersome for higher-order polynomials. A better approach involves using the `poly()` function to create the polynomial within `lm()`. For example, the following command produces a
-fifth-order polynomial fit:
+In order to create a cubic fit, we can include a predictor of the form `I(X^3)`. However, this approach can start to get cumbersome for higher-order polynomials. A better approach involves using the `poly()` function to create the polynomial within `lm()`. For example, the following command produces a fifth-order polynomial fit:
 
 ```{r chunk23}
 lm.fit5 <- lm(medv ~ poly(lstat, 5))

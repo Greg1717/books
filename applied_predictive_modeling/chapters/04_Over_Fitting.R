@@ -32,6 +32,7 @@
 
 library(caret)
 data(GermanCredit)
+str(GermanCredit)
 
 ## First, remove near-zero variance predictors then get rid of a few predictors 
 ## that duplicate values. For example, there are two possible values for the 
@@ -39,6 +40,7 @@ data(GermanCredit)
 ## dependencies, we get rid of one of the levels (e.g. "ForFree")
 
 GermanCredit <- GermanCredit[, -nearZeroVar(GermanCredit)]
+
 GermanCredit$CheckingAccountStatus.lt.0 <- NULL
 GermanCredit$SavingsAccountBonds.lt.100 <- NULL
 GermanCredit$EmploymentDuration.lt.1 <- NULL
@@ -50,6 +52,7 @@ GermanCredit$Housing.ForFree <- NULL
 ## Split the data into training (80%) and test sets (20%)
 set.seed(100)
 inTrain <- createDataPartition(GermanCredit$Class, p = .8)[[1]]
+
 GermanCreditTrain <- GermanCredit[ inTrain, ]
 GermanCreditTest  <- GermanCredit[-inTrain, ]
 
@@ -62,6 +65,7 @@ GermanCreditTest  <- GermanCredit[-inTrain, ]
 
 library(kernlab)
 set.seed(231)
+# Hyperparameter estimation for the Gaussian Radial Basis kernel ...
 sigDist <- sigest(Class ~ ., data = GermanCreditTrain, frac = 1)
 svmTuneGrid <- data.frame(sigma = as.vector(sigDist)[1], C = 2^(-2:7))
 
@@ -86,6 +90,7 @@ svmFit <- train(Class ~ .,
                 trControl = trainControl(method = "repeatedcv", 
                                          repeats = 5,
                                          classProbs = TRUE))
+
 ## classProbs = TRUE was added since the text was written
 
 ## Print the results
@@ -103,7 +108,10 @@ str(predictedClasses)
 
 ## Use the "type" option to get class probabilities
 
-predictedProbs <- predict(svmFit, newdata = GermanCreditTest, type = "prob")
+predictedProbs <-
+        predict(svmFit, 
+                newdata = GermanCreditTest, 
+                type = "prob")
 head(predictedProbs)
 
 
@@ -111,6 +119,7 @@ head(predictedProbs)
 ## is the control object.
 
 set.seed(1056)
+
 svmFit10CV <- train(Class ~ .,
                     data = GermanCreditTrain,
                     method = "svmRadial",
