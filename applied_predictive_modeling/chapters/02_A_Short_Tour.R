@@ -45,25 +45,32 @@ cars2010a$Year <- "2010 Model Year"
 cars2011a <- cars2011
 cars2011a$Year <- "2011 Model Year"
 
+# plot ========================================================================
 plotData <- rbind(cars2010a, cars2011a)
 
 library(lattice)
-xyplot(FE ~ EngDispl|Year, plotData,
+xyplot(FE ~ EngDispl|Year, 
+       plotData,
        xlab = "Engine Displacement",
        ylab = "Fuel Efficiency (MPG)",
        between = list(x = 1.2))
 
-## Fit a single linear model and conduct 10-fold CV to estimate the error
+## Fit a single linear model and conduct 10-fold CV to estimate the error =====
 library(caret)
 set.seed(1)
-lm1Fit <- train(FE ~ EngDispl, 
-                data = cars2010,
-                method = "lm", 
-                trControl = trainControl(method= "cv"))
+head(cars2010)
+str(cars2010)
+
+lm1Fit <- caret::train(
+        FE ~ EngDispl,
+        data = cars2010,
+        method = "lm",
+        trControl = trainControl(method = "cv")
+)
 lm1Fit
 
 
-## Fit a quadratic model too
+# Fit a quadratic model too ==================================================
 
 ## Create squared terms
 cars2010$ED2 <- cars2010$EngDispl^2
@@ -76,8 +83,7 @@ lm2Fit <- train(FE ~ EngDispl + ED2,
                 trControl = trainControl(method= "cv"))
 lm2Fit
 
-## Finally a MARS model (via the earth package)
-
+# Finally a MARS model (via the earth package) ================================
 library(earth)
 set.seed(1)
 marsFit <- train(FE ~ EngDispl, 
@@ -95,7 +101,6 @@ cars2011$lm2  <- predict(lm2Fit,  cars2011)
 cars2011$mars <- predict(marsFit, cars2011)
 
 ## Get test set performance values via caret's postResample function
-
 postResample(pred = cars2011$lm1,  obs = cars2011$FE)
 postResample(pred = cars2011$lm2,  obs = cars2011$FE)
 postResample(pred = cars2011$mars, obs = cars2011$FE)

@@ -26,10 +26,8 @@
 ### parallel. The sub-processes may reset the random number seed.
 ### Your results may slightly vary.
 ###
-################################################################################
 
-################################################################################
-### Section 3.1 Case Study: Cell Segmentation in High-Content Screening
+### Section 3.1 Case Study: Cell Segmentation in High-Content Screening =======
 
 library(AppliedPredictiveModeling)
 data(segmentationOriginal)
@@ -41,9 +39,7 @@ segTrain <- subset(segmentationOriginal, Case == "Train")
 segTrainX <- segTrain[, -(1:3)]
 segTrainClass <- segTrain$Class
 
-################################################################################
-### Section 3.2 Data Transformations for Individual Predictors
-
+### Section 3.2 Data Transformations for Individual Predictors ================
 ## The column VarIntenCh3 measures the standard deviation of the intensity
 ## of the pixels in the actin filaments
 
@@ -83,13 +79,14 @@ histogram(~segTrainTrans$PerimCh1,
           ylab = " ",
           type = "count")
 
-################################################################################
-### Section 3.3 Data Transformations for Multiple Predictors
 
+### Section 3.3 Data Transformations for Multiple Predictors ==================
+#### PCA ======================================================================
 ## R's prcomp is used to conduct PCA
-pr <- prcomp(~ AvgIntenCh1 + EntropyIntenCh1, 
-             data = segTrainTrans, 
-             scale. = TRUE)
+
+pr <- stats::prcomp( ~ AvgIntenCh1 + EntropyIntenCh1,
+                     data = segTrainTrans,
+                     scale. = TRUE)
 
 transparentTheme(pchSize = .7, trans = .3)
 
@@ -114,27 +111,34 @@ xyplot(PC2 ~ PC1,
        type = c("p", "g"),
        aspect = 1)
 
-
 ## Apply PCA to the entire set of predictors.
-
 ## There are a few predictors with only a single value, so we remove these first
 ## (since PCA uses variances, which would be zero)
 
 isZV <- apply(segTrainX, 2, function(x) length(unique(x)) == 1)
+isZV
 segTrainX <- segTrainX[, !isZV]
 
-# preProcess
+#### preProcess ======
 segPP <- preProcess(segTrainX, c("BoxCox", "center", "scale"))
 
-# predict
+#### predict ========
 segTrainTrans <- predict(segPP, segTrainX)
 
-segPCA <- prcomp(segTrainTrans, center = TRUE, scale. = TRUE)
+segTrainTrans
 
-## Plot a scatterplot matrix of the first three components
+segPCA <- prcomp(segTrainTrans, center = TRUE, scale. = TRUE)
+segPCA$sdev
+segPCA$rotation
+segPCA$center
+segPCA$scale
+segPCA$x
+
+## Plot a scatterplot matrix of the first three components ====================
 transparentTheme(pchSize = .8, trans = .3)
 
 panelRange <- extendrange(segPCA$x[, 1:3])
+
 splom(as.data.frame(segPCA$x[, 1:3]),
       groups = segTrainClass,
       type = c("p", "g"),
@@ -184,36 +188,37 @@ upperp <- function(...)
                  col = trellis.par.get("reference.line")$col,
                  lwd = trellis.par.get("reference.line")$lwd)
     panel.xyplot(args$x, args$y, groups = args$groups, subscripts = args$subscripts)
-  }
+}
+
 splom(~segRot[, 1:3],
       groups = segRot$Channel,
       lower.panel = function(...){}, upper.panel = upperp,
       prepanel.limits = function(x) panelRange,
       auto.key = list(columns = 2))
 
-################################################################################
-### Section 3.5 Removing Variables
-
+### Section 3.5 Removing Variables ============================================
 ## To filter on correlations, we first get the correlation matrix for the 
 ## predictor set
 
 segCorr <- cor(segTrainTrans)
-
+segCorr[1:7, 1:7]
 library(corrplot)
 corrplot(segCorr, order = "hclust", tl.cex = .35)
 
 ## caret's findCorrelation function is used to identify columns to remove.
 highCorr <- findCorrelation(segCorr, .75)
+highCorr
 
-################################################################################
-### Section 3.8 Computing (Creating Dummy Variables)
+
+### Section 3.8 Creating Dummy Variables ======================================
 
 data(cars)
+cars
+str(cars)
 type <- c("convertible", "coupe", "hatchback", "sedan", "wagon")
 cars$Type <- factor(apply(cars[, 14:18], 1, function(x) type[which(x == 1)]))
-
+head(cars)
 carSubset <- cars[sample(1:nrow(cars), 20), c(1, 2, 19)]
-
 head(carSubset)
 levels(carSubset$Type)
 
@@ -232,11 +237,8 @@ predict(withInteraction, head(carSubset))
 
 
 
-################################################################################
-### Session Information
+### Session Information =======================================================
 
 sessionInfo()
 
 q("no")
-
-

@@ -25,10 +25,9 @@
 ### parallel. The sub-processes may reset the random number seed.
 ### Your results may slightly vary.
 ###
-################################################################################
 
-################################################################################
-### Section 4.6 Choosing Final Tuning Parameters
+
+### Section 4.6 Choosing Final Tuning Parameters ==============================
 
 library(caret)
 data(GermanCredit)
@@ -51,7 +50,8 @@ GermanCredit$Housing.ForFree <- NULL
 
 ## Split the data into training (80%) and test sets (20%)
 set.seed(100)
-inTrain <- createDataPartition(GermanCredit$Class, p = .8)[[1]]
+inTrain <- caret::createDataPartition(GermanCredit$Class, 
+                                      p = .8)[[1]]
 
 GermanCreditTrain <- GermanCredit[ inTrain, ]
 GermanCreditTest  <- GermanCredit[-inTrain, ]
@@ -82,6 +82,7 @@ library(doMC)
 registerDoMC(4)
 
 set.seed(1056)
+
 svmFit <- train(Class ~ .,
                 data = GermanCreditTrain,
                 method = "svmRadial",
@@ -114,7 +115,7 @@ predictedProbs <-
                 type = "prob")
 head(predictedProbs)
 
-
+## Fit the model ==============================================================
 ## Fit the same model using different resampling methods. The main syntax change
 ## is the control object.
 
@@ -167,8 +168,7 @@ svmFitBoot632 <- train(Class ~ .,
                                                 number = 50))
 svmFitBoot632
 
-################################################################################
-### Section 4.8 Choosing Between Models
+### Section 4.8 Choosing Between Models =======================================
 
 set.seed(1056)
 glmProfile <- train(Class ~ .,
@@ -194,12 +194,10 @@ summary(modelDifferences)
 ## The actual paired t-test:
 modelDifferences$statistics$Accuracy
 
-################################################################################
+
+
 ### Session Information
 
 sessionInfo()
 
 q("no")
-
-
-
