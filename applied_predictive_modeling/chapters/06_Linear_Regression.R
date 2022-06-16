@@ -1,4 +1,3 @@
-################################################################################
 ### R code from Applied Predictive Modeling (2013) by Kuhn and Johnson.
 ### Copyright 2013 Kuhn and Johnson
 ### Web Page: http://www.appliedpredictivemodeling.com
@@ -26,26 +25,28 @@
 ### parallel. The sub-processes may reset the random number seed.
 ### Your results may slightly vary.
 ###
-################################################################################
 
-################################################################################
-### Section 6.1 Case Study: Quantitative Structure- Activity
+# Section 6.1 Case Study: Quantitative Structure- Activity ====================
 ### Relationship Modeling
 
 library(AppliedPredictiveModeling)
 data(solubility)
-
 library(lattice)
 
+## initial plots ======
 ### Some initial plots of the data
 
-xyplot(solTrainY ~ solTrainX$MolWeight, type = c("p", "g"),
+xyplot(solTrainY ~ solTrainX$MolWeight, 
+       type = c("p", "g"),
        ylab = "Solubility (log)",
        main = "(a)",
        xlab = "Molecular Weight")
-xyplot(solTrainY ~ solTrainX$NumRotBonds, type = c("p", "g"),
+
+xyplot(solTrainY ~ solTrainX$NumRotBonds, 
+       type = c("p", "g"),
        ylab = "Solubility (log)",
        xlab = "Number of Rotatable Bonds")
+
 bwplot(solTrainY ~ ifelse(solTrainX[,100] == 1, 
                           "structure present", 
                           "structure absent"),
@@ -59,6 +60,7 @@ bwplot(solTrainY ~ ifelse(solTrainX[,100] == 1,
 
 notFingerprints <- grep("FP", names(solTrainXtrans))
 
+## featurePlot =======
 library(caret)
 featurePlot(solTrainXtrans[, -notFingerprints],
             solTrainY,
@@ -67,22 +69,21 @@ featurePlot(solTrainXtrans[, -notFingerprints],
             labels = rep("", 2))
 
 library(corrplot)
-
 ### We used the full namespace to call this function because the pls
 ### package (also used in this chapter) has a function with the same
 ### name.
-
 corrplot::corrplot(cor(solTrainXtrans[, -notFingerprints]), 
                    order = "hclust", 
                    tl.cex = .8)
 
-################################################################################
-### Section 6.2 Linear Regression
+
+# Section 6.2 Linear Regression ===============================================
 
 ### Create a control function that will be used across models. We
 ### create the fold assignments explicitly instead of relying on the
 ### random number seed being set to identical values.
 
+## createFolds() & trainControl() =======
 set.seed(100)
 indx <- createFolds(solTrainY, returnTrain = TRUE)
 ctrl <- trainControl(method = "cv", index = indx)
@@ -99,6 +100,7 @@ lmTune0 <- train(x = solTrainXtrans, y = solTrainY,
 
 lmTune0                 
 
+## findCorrelation() ===============
 ### And another using a set of predictors reduced by unsupervised
 ### filtering. We apply a filter to reduce extreme between-predictor
 ### correlations. Note the lack of warnings.
@@ -107,6 +109,7 @@ tooHigh <- findCorrelation(cor(solTrainXtrans), .9)
 trainXfiltered <- solTrainXtrans[, -tooHigh]
 testXfiltered  <-  solTestXtrans[, -tooHigh]
 
+## train() ============
 set.seed(100)
 lmTune <- train(x = trainXfiltered, y = solTrainY,
                 method = "lm",
@@ -119,9 +122,10 @@ testResults <- data.frame(obs = solTestY,
                           Linear_Regression = predict(lmTune, testXfiltered))
 
 
-################################################################################
-### Section 6.3 Partial Least Squares
 
+# Section 6.3 Partial Least Squares ===========================================
+
+## PLS =====
 ## Run PLS and PCR on solubility data and compare results
 set.seed(100)
 plsTune <- train(x = solTrainXtrans, y = solTrainY,
@@ -132,6 +136,7 @@ plsTune
 
 testResults$PLS <- predict(plsTune, solTestXtrans)
 
+## PCR =====
 set.seed(100)
 pcrTune <- train(x = solTrainXtrans, y = solTrainY,
                  method = "pcr",
@@ -139,6 +144,7 @@ pcrTune <- train(x = solTrainXtrans, y = solTrainY,
                  trControl = ctrl)
 pcrTune                  
 
+## xyplot =====
 plsResamples <- plsTune$results
 plsResamples$Model <- "PLS"
 pcrResamples <- pcrTune$results
@@ -154,17 +160,17 @@ xyplot(RMSE ~ ncomp,
        groups = Model,
        type = c("o", "g"))
 
+## varImp() =======
 plsImp <- varImp(plsTune, scale = FALSE)
 plot(plsImp, top = 25, scales = list(y = list(cex = .95)))
 
-################################################################################
-### Section 6.4 Penalized Models
-
+# Section 6.4 Penalized Models ================================================
 ## The text used the elasticnet to obtain a ridge regression model.
 ## There is now a simple ridge regression method.
 
 ridgeGrid <- expand.grid(lambda = seq(0, .1, length = 15))
 
+## ridge ========
 set.seed(100)
 ridgeTune <- train(x = solTrainXtrans, y = solTrainY,
                    method = "ridge",
@@ -175,7 +181,7 @@ ridgeTune
 
 print(update(plot(ridgeTune), xlab = "Penalty"))
 
-
+## enet ======
 enetGrid <- expand.grid(lambda = c(0, 0.01, .1), 
                         fraction = seq(.05, 1, length = 20))
 set.seed(100)
@@ -189,13 +195,3 @@ enetTune
 plot(enetTune)
 
 testResults$Enet <- predict(enetTune, solTestXtrans)
-
-################################################################################
-### Session Information
-
-sessionInfo()
-
-q("no")
-
-
-

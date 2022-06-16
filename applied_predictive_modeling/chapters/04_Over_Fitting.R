@@ -1,4 +1,4 @@
-################################################################################
+
 ### R code from Applied Predictive Modeling (2013) by Kuhn and Johnson.
 ### Copyright 2013 Kuhn and Johnson
 ### Web Page: http://www.appliedpredictivemodeling.com
@@ -27,7 +27,7 @@
 ###
 
 
-### Section 4.6 Choosing Final Tuning Parameters ==============================
+# Section 4.6 Choosing Final Tuning Parameters ==============================
 
 library(caret)
 data(GermanCredit)
@@ -48,7 +48,8 @@ GermanCredit$Personal.Male.Married.Widowed <- NULL
 GermanCredit$Property.Unknown <- NULL
 GermanCredit$Housing.ForFree <- NULL
 
-## Split the data into training (80%) and test sets (20%)
+# split data ==================================================================
+# Split the data into training (80%) and test sets (20%)
 set.seed(100)
 inTrain <- caret::createDataPartition(GermanCredit$Class, 
                                       p = .8)[[1]]
@@ -56,6 +57,7 @@ inTrain <- caret::createDataPartition(GermanCredit$Class,
 GermanCreditTrain <- GermanCredit[ inTrain, ]
 GermanCreditTest  <- GermanCredit[-inTrain, ]
 
+# Hyperparameter estimation ===================================================
 ## The model fitting code shown in the computing section is fairly
 ## simplistic.  For the text we estimate the tuning parameter grid
 ## up-front and pass it in explicitly. This generally is not needed,
@@ -67,7 +69,9 @@ library(kernlab)
 set.seed(231)
 # Hyperparameter estimation for the Gaussian Radial Basis kernel ...
 sigDist <- sigest(Class ~ ., data = GermanCreditTrain, frac = 1)
+sigDist
 svmTuneGrid <- data.frame(sigma = as.vector(sigDist)[1], C = 2^(-2:7))
+svmTuneGrid
 
 ### Optional: parallel processing can be used via the 'do' packages,
 ### such as doMC, doMPI etc. We used doMC (not on Windows) to speed
@@ -78,9 +82,9 @@ svmTuneGrid <- data.frame(sigma = as.vector(sigDist)[1], C = 2^(-2:7))
 ### estimate the memory usage (VSIZE = total memory size) to be 
 ### 2566M/core.
 
+# svmRadial ==================================================================
 library(doMC)
 registerDoMC(4)
-
 set.seed(1056)
 
 svmFit <- train(Class ~ .,
@@ -92,35 +96,38 @@ svmFit <- train(Class ~ .,
                                          repeats = 5,
                                          classProbs = TRUE))
 
-## classProbs = TRUE was added since the text was written
-
 ## Print the results
 svmFit
 
+## plot ======
 ## A line plot of the average performance. The 'scales' argument is actually an 
 ## argument to xyplot that converts the x-axis to log-2 units.
 
 plot(svmFit, scales = list(x = list(log = 2)))
 
+## predict =======
 ## Test set predictions
-
-predictedClasses <- predict(svmFit, GermanCreditTest)
+predictedClasses <- predict(svmFit, 
+                            GermanCreditTest)
+predictedClasses
 str(predictedClasses)
 
+## probabilities ========
 ## Use the "type" option to get class probabilities
-
 predictedProbs <-
         predict(svmFit, 
                 newdata = GermanCreditTest, 
                 type = "prob")
+predictedProbs
 head(predictedProbs)
 
-## Fit the model ==============================================================
+# Fit the model ==============================================================
 ## Fit the same model using different resampling methods. The main syntax change
 ## is the control object.
 
 set.seed(1056)
 
+## cv ============
 svmFit10CV <- train(Class ~ .,
                     data = GermanCreditTrain,
                     method = "svmRadial",
@@ -130,6 +137,8 @@ svmFit10CV <- train(Class ~ .,
 svmFit10CV
 
 set.seed(1056)
+
+## LOOCV ================
 svmFitLOO <- train(Class ~ .,
                    data = GermanCreditTrain,
                    method = "svmRadial",
@@ -139,6 +148,7 @@ svmFitLOO <- train(Class ~ .,
 svmFitLOO
 
 set.seed(1056)
+## LGOCV ====
 svmFitLGO <- train(Class ~ .,
                    data = GermanCreditTrain,
                    method = "svmRadial",
@@ -149,6 +159,7 @@ svmFitLGO <- train(Class ~ .,
                                             p = .8))
 svmFitLGO 
 
+## boot =====
 set.seed(1056)
 svmFitBoot <- train(Class ~ .,
                     data = GermanCreditTrain,
@@ -158,6 +169,7 @@ svmFitBoot <- train(Class ~ .,
                     trControl = trainControl(method = "boot", number = 50))
 svmFitBoot
 
+## boot632 ======
 set.seed(1056)
 svmFitBoot632 <- train(Class ~ .,
                        data = GermanCreditTrain,
@@ -168,8 +180,7 @@ svmFitBoot632 <- train(Class ~ .,
                                                 number = 50))
 svmFitBoot632
 
-### Section 4.8 Choosing Between Models =======================================
-
+# Section 4.8 Choosing Between Models =======================================
 set.seed(1056)
 glmProfile <- train(Class ~ .,
                     data = GermanCreditTrain,
@@ -178,9 +189,12 @@ glmProfile <- train(Class ~ .,
                                              repeats = 5))
 glmProfile
 
-resamp <- resamples(list(SVM = svmFit, Logistic = glmProfile))
+resamp <- caret::resamples(list(SVM = svmFit, 
+                         Logistic = glmProfile))
 summary(resamp)
-
+resamp$models
+resamp$call
+resamp$values
 ## These results are slightly different from those shown in the text.
 ## There are some differences in the train() function since the 
 ## original results were produced. This is due to a difference in
@@ -188,6 +202,7 @@ summary(resamp)
 ## and when they are not. See, for example, 
 ## https://stat.ethz.ch/pipermail/r-help/2013-November/363188.html
 
+# model differences ===========================================================
 modelDifferences <- diff(resamp)
 summary(modelDifferences)
 
