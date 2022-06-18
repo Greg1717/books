@@ -10,6 +10,8 @@ output:
     fig_height: 4.5
     theme: readable
     highlight: tango
+editor_options: 
+  chunk_output_type: console
 ---
 
 # Introduction
@@ -394,3 +396,46 @@ write.csv(solution, file = 'rf_mod_Solution.csv', row.names = F)
 Thank you for taking the time to read through my first exploration of a Kaggle dataset. I look forward to doing more. Again, this newbie welcomes comments and suggestions!
 
 ---
+
+# Gergely's Experiments
+# EDA
+# Linear Regression
+```{r}
+head(train)
+```
+
+Create linear model:
+```{r}
+lm_model_1 <- lm(Survived ~ as.numeric(Pclass) + Sex + Age,
+                 data = train)
+summary(lm_model_1)
+```
+
+Diagnostic Plots
+```{r}
+plot(lm_model_1)
+```
+Predict:
+```{r}
+lm_model_1_prediction <- predict(lm_model_1, test)
+lm_model_1_prediction
+```
+
+
+# KNN
+```{r}
+library(class)
+model_knn <- knn(train = train, test = test, cl = train$Survived)
+```
+
+
+```{r}
+iris3
+str(iris3)
+train <- rbind(iris3[1:25,,1], iris3[1:25,,2], iris3[1:25,,3])
+test <- rbind(iris3[26:50,,1], iris3[26:50,,2], iris3[26:50,,3])
+cl <- factor(c(rep("s",25), rep("c",25), rep("v",25)))
+knn(train, test, cl, k = 3, prob=TRUE)
+attributes(.Last.value)
+```
+
