@@ -39,13 +39,16 @@ library('randomForest') # classification algorithm
 Now that our packages are loaded, let's read in and take a peek at the data.
 
 ```{r, message=FALSE, warning=FALSE}
-train <- read.csv('train.csv', stringsAsFactors = F)
-test  <- read.csv('test.csv', stringsAsFactors = F)
+s <- list.files(path = "./kaggle_titanic",pattern = "train", full.names = T)
+train <- read.csv(s, stringsAsFactors = F)
+s <- list.files(path = "./kaggle_titanic",pattern = "test", full.names = T)
+test  <- read.csv(s, stringsAsFactors = F)
 
 full  <- bind_rows(train, test) # bind training & test data
 
 # check data
 str(full)
+table(full$Survived, useNA = "always")
 ```
 
 ```{r}
@@ -99,20 +102,19 @@ full$Surname <- sapply(full$Name,
                       function(x) strsplit(x, split = '[,.]')[[1]][1])
 ```
 
-```{r results='asis'}
-cat(paste('We have <b>', nlevels(factor(full$Surname)), '</b> unique surnames. I would be interested to infer ethnicity based on surname --- another time.'))
-```
 
 ## Do families sink or swim together?
 
 Now that we've taken care of splitting passenger name into some new variables, we can take it a step further and make some new family variables. First we're going to make a **family size** variable based on number of siblings/spouse(s) (maybe someone has more than one spouse?) and number of children/parents. 
 
 ```{r}
+head(full)
 # Create a family size variable including the passenger themselves
 full$Fsize <- full$SibSp + full$Parch + 1
 
 # Create a family variable 
 full$Family <- paste(full$Surname, full$Fsize, sep='_')
+head(full)
 ```
 
 What does our family size variable look like? To help us understand how it may relate to survival, let's plot it among the training data.
@@ -135,7 +137,10 @@ full$FsizeD[full$Fsize < 5 & full$Fsize > 1] <- 'small'
 full$FsizeD[full$Fsize > 4] <- 'large'
 
 # Show family size by survival using a mosaic plot
-mosaicplot(table(full$FsizeD, full$Survived), main='Family Size by Survival', shade=TRUE)
+
+mosaicplot(table(full$FsizeD, full$Survived),
+           main = 'Family Size by Survival',
+           shade = TRUE)
 ```
 
 The mosaic plot shows that we preserve our rule that there's a survival penalty among singletons and large families, but a benefit for passengers in small families. I want to do something further with our age variable, but `r sum(is.na(full$Age))` rows have missing age values, so we will have to wait until after we address missingness.
@@ -306,7 +311,6 @@ full$Mother <- factor(full$Mother)
 ```
 
 All of the variables we care about should be taken care of and there should be no missing data. I'm going to double check just to be sure:
-
 ```{r}
 md.pattern(full)
 ```
@@ -355,7 +359,7 @@ Let's look at relative variable importance by plotting the mean decrease in Gini
 
 ```{r, message=FALSE, warning=FALSE}
 # Get importance
-importance    <- importance(rf_model)
+importance    <- randomForest::importance(rf_model)
 varImportance <- data.frame(Variables = row.names(importance), 
                             Importance = round(importance[ ,'MeanDecreaseGini'],2))
 

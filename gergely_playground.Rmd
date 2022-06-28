@@ -1,0 +1,411 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Purpose
+This Notebook serves as a playground to practice topics learned:
+
+- Applied Predictive Modeling
+- Introduction to Statistical Learning
+
+# Simple Linear Regression
+## Data
+```{r}
+head(mtcars)
+```
+
+## Fit Model
+
+We want to analyze how miles per gallon depend on displacement.
+```{r}
+lm_simple <- lm(mtcars$mpg ~ mtcars$disp)
+summary(lm_simple)
+```
+
+## Plot Model
+```{r}
+plot(mtcars$disp, mtcars$mpg)
+abline(lm_simple)
+```
+
+## Diagnostic Plots
+```{r}
+par(mfrow=c(2, 2))
+plot(lm_simple)
+par(mfrow = c(1, 1))
+```
+
+
+***
+# Multiple Linear Regression
+Review data
+```{r}
+summary(mtcars)
+```
+
+## Fit Model
+We want to analyze how miles per gallon depend on displacement and weight.
+```{r}
+lm_mult <- lm(mtcars$mpg ~ mtcars$disp + mtcars$wt)
+summary(lm_mult)
+```
+
+## Diagnostic Plots
+```{r}
+par(mfrow=c(2, 2))
+plot(lm_mult)
+par(mfrow = c(1, 1))
+```
+
+
+***
+# Logistic Regression
+
+## Fit Model
+
+Fit logistic regression model
+vs	Engine (0 = V-shaped, 1 = straight)
+```{r}
+model <- stats::glm(vs ~ hp, data=mtcars, family=binomial)
+model
+```
+
+```{r}
+summary(model)
+```
+
+```{r}
+attributes(model)
+```
+
+
+## Interpretation
+
+### Deviance
+
+Whenever you fit a general linear model (like logistic regression, Poisson regression, etc.), most statistical software will produce values for the **null deviance** and **residual deviance** of the model.
+
+The **null deviance** tells us how well the response variable can be predicted by a model with only an intercept term.
+
+The **residual deviance** tells us how well the response variable can be predicted by a model with p predictor variables. The lower the value, the better the model is able to predict the value of the response variable.
+
+
+### Chi-Square
+
+To determine if a model is “useful” we can compute the **Chi-Square statistic**.
+
+```{r}
+chisq_log_reg <- mean(model$null.deviance) - mean(model$deviance)
+chisq_log_reg
+```
+
+
+### P-value
+
+To find the **p-value** that corresponds to a Chi-Square test statistic:
+```{r}
+stats::pchisq(q = chisq_log_reg, 
+              df = model$df.null - 
+                      model$df.residual,
+              lower.tail = F)
+```
+
+
+## Predict
+Define new data frame that contains predictor variable
+```{r}
+newdata <- data.frame(hp=seq(min(mtcars$hp), 
+                             max(mtcars$hp),
+                             len=500))
+summary(newdata)
+```
+
+Use fitted model to predict values of vs
+```{r}
+newdata$vs = stats::predict(model, newdata, type = "response")
+summary(newdata)
+```
+
+## Plot
+Plot logistic regression curve
+```{r}
+plot(vs ~ hp, data = mtcars, col = "steelblue")
+lines(vs ~ hp, data = newdata, lwd = 2)
+```
+
+
+***
+# KNN - caret
+```{r}
+library(caret)
+data(iris)
+summary(iris)
+```
+
+
+## Plot Data
+
+The following plot command from the caret package can show us how the Species values are distributed in a pairwise plot. An observation from this plot is that Versicolor and Virginica have similar patterns and Setosa is quite distinct. An intuition is that we can predict Setosa easily and might have some challenges in Versicolor and Virginica.
+
+```{r}
+#Visualising the data set
+transparentTheme(trans = .4)
+
+caret::featurePlot(
+        x = iris[, 1:4],
+        y = iris$Species,
+        plot = "ellipse",
+        auto.key = list(columns = 3)
+)
+```
+
+
+## Partitioning the Data
+
+Now we split up the data set into a train and a test partition. We use 80% of the data set to use into train and the remaining 20% into test. We also define a 10 fold cross validation method to be repeated 5 times. This process decreases over-fitting in the training set and helps the model work on an unknown or new data set. The model will be tested and trained several times on subsets of the training data to increase the accuracy in the test data.
+
+```{r}
+#Split into train and test data set
+trainIndex <- createDataPartition(iris$Species,
+                                  p = .8,
+                                  list = FALSE,
+                                  times = 1)
+train <- iris[trainIndex, ]
+test  <- iris[-trainIndex, ]
+```
+
+
+## Fit Model
+
+Our problem is a Classification problem since our output predictor variable is a class. We have several machine learning algorithms for class prediction. We implement 3 methods here and compare them to find the best fit.
+
+
+### Rpart
+
+First fit a decision tree model (Rpart) to the train data set. A decision tree is a model with an “if this then that approach” and it is easy & fast to interpret with visualizing the tree.
+
+We also preprocess the data set so that any variable with very different range of values will not affect our outcome.
+
+```{r}
+#Cross validation; Control the computational nuances of the train function
+fitControl <- caret::trainControl(method = "repeatedcv",
+                           number = 10,
+                           repeats = 5)
+
+fitControl
+```
+
+caret::train
+```{r}
+# caret::train - Fit Predictive Models over Different Tuning Parameters
+# Rpart is a powerful machine learning library in R that is used for building classification and regression trees. This library implements recursive partitioning.
+dt.fit <- caret::train(
+        Species ~ .,
+        data = train,
+        method = "rpart",
+        trControl = fitControl,
+        preProcess = c("center", "scale")
+)
+
+dt.fit
+```
+
+
+**Accuracy** is the percentage of correctly classifies instances out of all instances. From the above results we can see that the model has a good accuracy value. **Kappa** is similar to accuracy but it is more based on a normalised random draw of the data set, i.e, it would be more useful for class imbalanced classifications. **CP** is the complexity parameter which is used to control the decision tree’s size and choose the optimal tree size. We can see that the model has chosen the tree size with the best accuracy.
+
+Next, we predict the test data set using the trained model. A confusion matrix is used to understand the performance of the model. It is a table wise comparison of actual and predicted values. A variable importance plot shows that Petal width is the most important variable that has helped us predict the Species class.
+
+#### Prediction
+```{r}
+predictions <- predict(dt.fit, test)
+
+confusionMatrix(predictions, test$Species)
+```
+
+#### Variable Importance
+```{r}
+plot(caret::varImp(dt.fit))
+```
+
+The decision tree has predicted an accuracy of 93%
+
+### KNN
+
+The second algorithm we use is the K – Nearest neighbor algorithm. This is a great method for classification of the iris data set. In simple words, it takes inputs from the neighborhood data points and predicts the test data with confidence. K is the number of segments and the algorithm has chosen the best K value based on accuracy.
+
+#### Fit
+```{r}
+knn.fit <- train(
+        Species ~ .,
+        data = train,
+        method = "knn",
+        trControl = fitControl,
+        preProcess = c("center", "scale")
+)
+
+knn.fit
+```
+
+#### Prediction
+```{r}
+predictions <- predict(knn.fit, test)
+
+confusionMatrix(predictions, test$Species)
+
+```
+
+#### varImp
+```{r}
+plot(varImp(knn.fit))
+```
+The KNN predicts with an accuracy of 93%
+
+
+### Random Forest
+
+The final method we use is the Random Forest method. This method uses a set of decision trees to aggregate the final results. This way we can minimize error caused from individual decision trees. The mtry value is the number of variables available for splitting of each tree node. Here again the optimal value model is selected based on accuracy.
+
+#### Fit
+```{r}
+rf.fit <- train(
+        Species ~ .,
+        data = train,
+        method = "rf",
+        trControl = fitControl,
+        preProcess = c("center", "scale")
+)
+
+rf.fit
+```
+
+#### Prediction
+```{r}
+predictions <- predict(rf.fit, test)
+confusionMatrix(predictions, test$Species)
+```
+
+#### varImp
+```{r}
+plot(varImp(rf.fit))
+```
+The random forest predicts with an accuracy of 93%
+
+From the above analysis we can see that all models have performed very well and therefore we can use the predictions from either of the model.
+
+# Titanic
+```{r load data Titanic}
+train <- read.csv('kaggle_titanic/train.csv', stringsAsFactors = F)
+test  <- read.csv('kaggle_titanic/test.csv', stringsAsFactors = F)
+# full  <- rbind(train, test) # bind training & test data
+# use the test file as our full titanic DB
+titanic <- train
+head(titanic)
+```
+
+```{r}
+str(titanic)
+```
+Add family size:
+```{r}
+titanic$family_size <- 1 + titanic$SibSp + titanic$Parch
+table(titanic$family_size)
+```
+
+Family sizes by Passanger Class:
+```{r}
+table(titanic$Pclass, titanic$family_size)
+```
+
+
+# Missing Data
+```{r}
+head(titanic[!complete.cases(titanic),], 17)
+table(is.na(titanic$Age))
+titanic <- titanic[!is.na(titanic$Age),]
+hist(titanic$Age)
+```
+Add variable 'child' as logical.
+```{r}
+titanic$child <- ifelse(titanic$Age < 18, TRUE, FALSE)
+hist(titanic$Age)
+```
+
+# Logistic Regression
+```{r}
+head(titanic)
+log_regr_titanic <- glm(Survived ~ Pclass + Sex + Age,
+                        data = titanic,
+                        family = binomial)
+summary(log_regr_titanic)
+```
+
+
+
+
+
+
+# Random Forest
+```{r}
+library(randomForest)
+# Set a random seed
+set.seed(754)
+
+# Build the model (note: not all possible variables are used)
+rf_model <- randomForest(factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + 
+                                            Fare + family_size + child,
+                                            data = titanic)
+
+# Show model error
+plot(rf_model, ylim=c(0,0.36))
+legend('topright', colnames(rf_model$err.rate), col=1:3, fill=1:3)
+
+```
+
+```{r}
+
+```
+
+## Variable importance
+
+Let's look at relative variable importance by plotting the mean decrease in Gini calculated across all trees.
+
+```{r, message=FALSE, warning=FALSE}
+# Get importance
+importance    <- randomForest::importance(rf_model)
+varImportance <- data.frame(Variables = row.names(importance), 
+                            Importance = round(importance[ ,'MeanDecreaseGini'],2))
+varImportance <- varImportance[order(-varImportance$Importance),]
+# Create a rank variable based on importance
+# rankImportance <- varImportance %>%
+  # mutate(Rank = paste0('#',dense_rank(desc(Importance))))
+
+library(ggplot2)
+# Use ggplot2 to visualize the relative importance of variables
+ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
+    y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+    hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = 'Variables') +
+  coord_flip() + 
+  theme_few()
+```
+
+
+## Prediction!
+We're ready for the final step --- making our prediction! When we finish here, we could iterate through the preceding steps making tweaks as we go or fit the data using different models or use different combinations of variables to achieve better predictions. But this is a good starting (and stopping) point for me now.
+
+```{r}
+# Predict using the test set
+prediction <- predict(rf_model, test)
+
+# Save the solution to a dataframe with two columns: PassengerId and Survived (prediction)
+solution <- data.frame(PassengerID = test$PassengerId, Survived = prediction)
+
+# Write the solution to file
+write.csv(solution, file = 'rf_mod_Solution.csv', row.names = F)
+```
+
