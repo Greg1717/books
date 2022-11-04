@@ -38,8 +38,7 @@ str(GermanCredit)
 ## housing variable: "Rent", "Own" and "ForFree". So that we don't have linear
 ## dependencies, we get rid of one of the levels (e.g. "ForFree")
 
-GermanCredit <- GermanCredit[, -nearZeroVar(GermanCredit)]
-
+GermanCredit <- GermanCredit[, -caret::nearZeroVar(GermanCredit)]
 GermanCredit$CheckingAccountStatus.lt.0 <- NULL
 GermanCredit$SavingsAccountBonds.lt.100 <- NULL
 GermanCredit$EmploymentDuration.lt.1 <- NULL
@@ -53,7 +52,6 @@ GermanCredit$Housing.ForFree <- NULL
 set.seed(100)
 inTrain <- caret::createDataPartition(GermanCredit$Class, 
                                       p = .8)[[1]]
-
 GermanCreditTrain <- GermanCredit[ inTrain, ]
 GermanCreditTest  <- GermanCredit[-inTrain, ]
 
@@ -64,15 +62,15 @@ GermanCreditTest  <- GermanCredit[-inTrain, ]
 ## but was used here so that we could trim the cost values to a
 ## presentable range and to re-use later with different resampling
 ## methods.
-
 library(kernlab)
 set.seed(231)
 # Hyperparameter estimation for the Gaussian Radial Basis kernel ...
-sigDist <- sigest(Class ~ ., data = GermanCreditTrain, frac = 1)
+sigDist <- kernlab::sigest(Class ~ ., 
+                           data = GermanCreditTrain, 
+                           frac = 1)
 sigDist
 svmTuneGrid <- data.frame(sigma = as.vector(sigDist)[1], C = 2^(-2:7))
 svmTuneGrid
-
 ### Optional: parallel processing can be used via the 'do' packages,
 ### such as doMC, doMPI etc. We used doMC (not on Windows) to speed
 ### up the computations.
@@ -95,16 +93,12 @@ svmFit <- train(Class ~ .,
                 trControl = trainControl(method = "repeatedcv", 
                                          repeats = 5,
                                          classProbs = TRUE))
-
 ## Print the results
 svmFit
-
-## plot ======
+## plot =======================================================================
 ## A line plot of the average performance. The 'scales' argument is actually an 
 ## argument to xyplot that converts the x-axis to log-2 units.
-
 plot(svmFit, scales = list(x = list(log = 2)))
-
 ## predict =======
 ## Test set predictions
 predictedClasses <- predict(svmFit, 
@@ -118,15 +112,12 @@ predictedProbs <-
         predict(svmFit, 
                 newdata = GermanCreditTest, 
                 type = "prob")
-predictedProbs
 head(predictedProbs)
 
 # Fit the model ==============================================================
 ## Fit the same model using different resampling methods. The main syntax change
 ## is the control object.
-
 set.seed(1056)
-
 ## cv ============
 svmFit10CV <- train(Class ~ .,
                     data = GermanCreditTrain,
@@ -135,9 +126,7 @@ svmFit10CV <- train(Class ~ .,
                     tuneGrid = svmTuneGrid,
                     trControl = trainControl(method = "cv", number = 10))
 svmFit10CV
-
 set.seed(1056)
-
 ## LOOCV ================
 svmFitLOO <- train(Class ~ .,
                    data = GermanCreditTrain,
@@ -146,7 +135,6 @@ svmFitLOO <- train(Class ~ .,
                    tuneGrid = svmTuneGrid,
                    trControl = trainControl(method = "LOOCV"))
 svmFitLOO
-
 set.seed(1056)
 ## LGOCV ====
 svmFitLGO <- train(Class ~ .,
@@ -188,7 +176,7 @@ glmProfile <- train(Class ~ .,
                     trControl = trainControl(method = "repeatedcv", 
                                              repeats = 5))
 glmProfile
-
+# These functions provide methods for collection, analyzing and visualizing a set of resampling results from a common data set.
 resamp <- caret::resamples(list(SVM = svmFit, 
                          Logistic = glmProfile))
 summary(resamp)
@@ -205,14 +193,5 @@ resamp$values
 # model differences ===========================================================
 modelDifferences <- diff(resamp)
 summary(modelDifferences)
-
 ## The actual paired t-test:
 modelDifferences$statistics$Accuracy
-
-
-
-### Session Information
-
-sessionInfo()
-
-q("no")

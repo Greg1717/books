@@ -262,12 +262,8 @@ with(sleep, t.test(extra[group == 1], extra[group == 2]))
 
 ## Formula interface
 t.test(extra ~ group, data = sleep)
-
-
-
 ## Formula interface to one-sample test
 t.test(extra ~ 1, data = sleep)
-
 ## Formula interface to paired test
 ## The sleep data are actually paired, so could have been in wide format:
 sleep2 <- reshape(sleep, direction = "wide", 

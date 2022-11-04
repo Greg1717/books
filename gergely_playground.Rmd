@@ -14,14 +14,19 @@ This Notebook serves as a playground to practice topics learned:
 # Simple Linear Regression
 ## Data
 ```{r}
+str(mtcars)
+rownames(mtcars)
 head(mtcars)
 ```
+
 
 ## Fit Model
 
 We want to analyze how miles per gallon depend on displacement.
 ```{r}
+# fit a linear model
 lm_simple <- lm(mtcars$mpg ~ mtcars$disp)
+# summary of linear model
 summary(lm_simple)
 ```
 
@@ -49,7 +54,7 @@ summary(mtcars)
 ## Fit Model
 We want to analyze how miles per gallon depend on displacement and weight.
 ```{r}
-lm_mult <- lm(mtcars$mpg ~ mtcars$disp + mtcars$wt)
+lm_mult <- lm(mtcars$mpg ~ ., data = mtcars)
 summary(lm_mult)
 ```
 
@@ -68,12 +73,9 @@ par(mfrow = c(1, 1))
 
 Fit logistic regression model
 vs	Engine (0 = V-shaped, 1 = straight)
-```{r}
-model <- stats::glm(vs ~ hp, data=mtcars, family=binomial)
-model
-```
 
 ```{r}
+model <- stats::glm(vs ~ hp, data = mtcars, family = binomial)
 summary(model)
 ```
 
@@ -108,13 +110,13 @@ chisq_log_reg
 To find the **p-value** that corresponds to a Chi-Square test statistic:
 ```{r}
 stats::pchisq(q = chisq_log_reg, 
-              df = model$df.null - 
-                      model$df.residual,
+              df = model$df.null - model$df.residual,
               lower.tail = F)
 ```
 
 
 ## Predict
+
 Define new data frame that contains predictor variable
 ```{r}
 newdata <- data.frame(hp=seq(min(mtcars$hp), 
@@ -138,7 +140,7 @@ lines(vs ~ hp, data = newdata, lwd = 2)
 
 
 ***
-# KNN - caret
+# Rpart vs KNN vs Random Forest
 ```{r}
 library(caret)
 data(iris)
@@ -169,7 +171,7 @@ Now we split up the data set into a train and a test partition. We use 80% of th
 
 ```{r}
 #Split into train and test data set
-trainIndex <- createDataPartition(iris$Species,
+trainIndex <- createDataPartition(y = iris$Species,
                                   p = .8,
                                   list = FALSE,
                                   times = 1)
@@ -185,7 +187,7 @@ Our problem is a Classification problem since our output predictor variable is a
 
 ### Rpart
 
-First fit a decision tree model (Rpart) to the train data set. A decision tree is a model with an “if this then that approach” and it is easy & fast to interpret with visualizing the tree.
+First fit a decision tree model (**Rpart**) to the train data set. A decision tree is a model with an “if this then that approach” and it is easy & fast to interpret with visualizing the tree.
 
 We also preprocess the data set so that any variable with very different range of values will not affect our outcome.
 
@@ -194,7 +196,6 @@ We also preprocess the data set so that any variable with very different range o
 fitControl <- caret::trainControl(method = "repeatedcv",
                            number = 10,
                            repeats = 5)
-
 fitControl
 ```
 
@@ -218,10 +219,12 @@ dt.fit
 
 Next, we predict the test data set using the trained model. A confusion matrix is used to understand the performance of the model. It is a table wise comparison of actual and predicted values. A variable importance plot shows that Petal width is the most important variable that has helped us predict the Species class.
 
+
 #### Prediction
+
 ```{r}
 predictions <- predict(dt.fit, test)
-
+# the confusion matrix calculates a cross-tabulation of observed and predicted classes with associated statistics.
 confusionMatrix(predictions, test$Species)
 ```
 
@@ -231,6 +234,7 @@ plot(caret::varImp(dt.fit))
 ```
 
 The decision tree has predicted an accuracy of 93%
+
 
 ### KNN
 
@@ -252,9 +256,7 @@ knn.fit
 #### Prediction
 ```{r}
 predictions <- predict(knn.fit, test)
-
 confusionMatrix(predictions, test$Species)
-
 ```
 
 #### varImp
@@ -294,6 +296,202 @@ plot(varImp(rf.fit))
 The random forest predicts with an accuracy of 93%
 
 From the above analysis we can see that all models have performed very well and therefore we can use the predictions from either of the model.
+
+
+***
+# PCA
+
+## Base R
+
+### Skewness
+
+**Skewness** is a measure of the asymmetry of a distribution. A distribution is asymmetrical when its left and right side are not mirror images. A distribution can have right (or positive), left (or negative), or zero skewness.
+
+A right-skewed distribution is longer on the right side of its peak, and a left-skewed distribution is longer on the left side of its peak.
+
+Zero skew:  mean = median
+Left skew: mean < median
+Right skew: mean > median
+
+
+#### Calc Skewness
+```{r}
+library(e1071)
+skewness(mtcars$hp)
+apply(mtcars, 2, skewness)
+```
+
+#### Transform Skewed Distributions
+Find and apply appropriate transformation. 
+```{r}
+mtcars_trans <- caret::BoxCoxTrans(mtcars$hp)
+mtcars_trans
+# original data
+head(mtcars$hp)
+hist(mtcars$hp)
+# transform
+mtcars_hp_unskewed <- stats::predict(mtcars_trans, mtcars$hp)
+hist(mtcars_hp_unskewed)
+```
+
+### stats::prcomp
+```{r}
+pcaObject <- stats::prcomp(mtcars,
+                           center = TRUE,
+                           scale. = TRUE)
+pcaObject
+pcaObject$sdev
+# variable loadings:
+pcaObject$rotation
+pcaObject$center
+pcaObject$scale
+pcaObject$x
+sum(pcaObject$sdev)
+percent_variance <- pcaObject$sdev^2 / sum(pcaObject$sdev^2) * 100
+percent_variance
+plot(percent_variance)
+lines(percent_variance)
+perc_var_cumsum <- cumsum(percent_variance)
+perc_var_cumsum
+plot(perc_var_cumsum)
+lines(perc_var_cumsum)
+head(pcaObject$x)
+```
+
+
+## caret
+
+```{r}
+trans <- caret::preProcess(mtcars,
+                           method = c("BoxCox", "center", "scale", "pca"))
+trans
+# variable loadings:
+head(trans$rotation)
+mtcars_transf_caret <- stats::predict(trans, mtcars)
+head(mtcars_transf_caret)
+```
+
+## Filtering
+### nearZeroVar
+```{r}
+library(caret)
+caret::nearZeroVar(mtcars, saveMetrics = T)
+
+nearZeroVar(iris[, -5], saveMetrics = TRUE)
+data(BloodBrain)
+nearZeroVar(bbbDescr)
+nearZeroVar(bbbDescr, names = TRUE)
+```
+
+### Correlations
+```{r}
+correlations <- cor(mtcars)
+correlations
+library(corrplot)
+corrplot(correlations)
+corrplot(correlations, order = "hclust")
+highCorr <- caret::findCorrelation(correlations, cutoff = 0.75)
+highCorr
+head(mtcars[, highCorr])
+filtered_mtcars <- mtcars[, -highCorr]
+filtered_mtcars
+```
+
+# Creating Dummy Variables
+```{r}
+library(caret)
+str(mtcars)
+mtcars_dummy <- mtcars
+# convert gear to factors
+mtcars_dummy$gear <- as.factor(mtcars_dummy$gear)
+str(mtcars_dummy)
+# dummyVars
+mtcars_dummy_new <- caret::dummyVars(~gear,
+                                 data = mtcars_dummy,
+                                 levelsOnly = TRUE)
+mtcars_dummy_new
+
+stats::predict(mtcars_dummy_new, mtcars_dummy)
+```
+
+
+# PLS
+
+source: https://www.statology.org/partial-least-squares-in-r/
+
+One of the most common problems that you’ll encounter in machine learning is multicollinearity. This occurs when two or more predictor variables in a dataset are highly correlated.
+
+When this occurs, a model may be able to fit a training dataset well but it may perform poorly on a new dataset it has never seen because it overfits the training set.
+
+One way to get around this problem is to use a method known as partial least squares, which works as follows:
+
+- Standardize both the predictor and response variables.
+- Calculate M linear combinations (called “PLS components”) of the original p predictor variables that explain a significant amount of variation in both the response variable and the predictor variables.
+- Use the method of least squares to fit a linear regression model using the PLS components as predictors.
+- Use k-fold cross-validation to find the optimal number of PLS components to keep in the model.
+
+For this example we’ll fit a partial least squares (PLS) model using hp as the response variable and the following variables as the predictor variables:
+
+mpg
+disp
+drat
+wt
+qsec
+
+```{r}
+library(pls)
+#make this example reproducible
+set.seed(1)
+
+#fit PCR model
+model_pls <-
+        plsr(
+                hp ~ mpg + disp + drat + wt + qsec,
+                data = mtcars,
+                scale = TRUE,
+                validation = "CV"
+        )
+summary(model_pls)
+```
+
+
+
+## Validation Plots
+
+We can also visualize the test RMSE (along with the test MSE and R-squared) based on the number of PLS components by using the validationplot() function. 
+```{r}
+#visualize cross-validation plots
+pls::validationplot(model_pls)
+pls::validationplot(model_pls, val.type="MSEP")
+pls::validationplot(model_pls, val.type="R2")
+```
+
+
+
+## Predictions
+```{r}
+#define training and testing sets
+train <- mtcars[1:25, c("hp", "mpg", "disp", "drat", "wt", "qsec")]
+
+y_test <- mtcars[26:nrow(mtcars), c("hp")]
+
+test <- mtcars[26:nrow(mtcars), c("mpg", "disp", "drat", "wt", "qsec")]
+    
+#use model to make predictions on a test set
+model_plsr <-
+        plsr(
+                hp ~ mpg + disp + drat + wt + qsec,
+                data = train,
+                scale = TRUE,
+                validation = "CV"
+        )
+
+pcr_pred <- predict(model_plsr, test, ncomp = 2)
+
+#calculate RMSE
+sqrt(mean((pcr_pred - y_test)^2))
+```
+
 
 # Titanic
 ```{r load data Titanic}

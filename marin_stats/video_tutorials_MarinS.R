@@ -23,7 +23,6 @@ help(plot)
 attach(LungCapData)
 cor(Age, Height)
 # => fairly strong linear association
-
 plot(
     Age,
     Height,
@@ -38,7 +37,6 @@ plot(
 )
 # add linear regression
 abline(lm(Height~Age), col = 4)
-
 # add smoother to the plot
 lines(smooth.spline(Age, Height), lty = 2, lwd = 5)
 

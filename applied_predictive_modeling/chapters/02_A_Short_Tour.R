@@ -32,7 +32,7 @@
 
 library(AppliedPredictiveModeling)
 data(FuelEconomy)
-
+head(cars2010)
 ## Format data for plotting against engine displacement
 
 ## Sort by engine displacement
@@ -47,7 +47,7 @@ cars2011a$Year <- "2011 Model Year"
 
 # plot ========================================================================
 plotData <- rbind(cars2010a, cars2011a)
-
+head(plotData)
 library(lattice)
 xyplot(FE ~ EngDispl|Year, 
        plotData,
@@ -69,13 +69,10 @@ lm1Fit <- caret::train(
 )
 lm1Fit
 
-
-# Fit a quadratic model too ==================================================
-
+# Fit a quadratic model too ===================================================
 ## Create squared terms
 cars2010$ED2 <- cars2010$EngDispl^2
 cars2011$ED2 <- cars2011$EngDispl^2
-
 set.seed(1)
 lm2Fit <- train(FE ~ EngDispl + ED2, 
                 data = cars2010,
@@ -92,24 +89,12 @@ marsFit <- train(FE ~ EngDispl,
                  tuneLength = 15,
                  trControl = trainControl(method= "cv"))
 marsFit
-
 plot(marsFit)
-
 ## Predict the test set data
 cars2011$lm1  <- predict(lm1Fit,  cars2011)
 cars2011$lm2  <- predict(lm2Fit,  cars2011)
 cars2011$mars <- predict(marsFit, cars2011)
-
 ## Get test set performance values via caret's postResample function
 postResample(pred = cars2011$lm1,  obs = cars2011$FE)
 postResample(pred = cars2011$lm2,  obs = cars2011$FE)
 postResample(pred = cars2011$mars, obs = cars2011$FE)
-
-################################################################################
-### Session Information
-
-sessionInfo()
-
-q("no")
-
-

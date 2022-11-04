@@ -18,16 +18,15 @@ There were fields that identified each cell (called Cell) and a factor vector th
 ?apropos
 apropos("matrix")
 RSiteSearch("confusion", restrict = "functions")
-
 library(AppliedPredictiveModeling)
 library(data.table)
-
 data(segmentationOriginal)
 segmentationOriginal
 str(segmentationOriginal)
 sapply(segmentationOriginal, class)
 segData <- as.data.table(segmentationOriginal)
 # filter on training data
+segData[, table(Case)]
 segData <- segData[Case == "Train"]
 CellID <- segData$Cell
 class <- segData$Class
@@ -45,14 +44,10 @@ segData <- segData[, -..statusColNum]
 
 ```{r}
 # As previously discussed, some features exhibited significantly skewness. The skewness function in the e1071 package calculates the sample skewness statistic for each predictor:
-
 library(e1071)
-
 # For one predictor:
 skewness(segData$AngleCh1)
-
 # Since all the predictors are numeric columns, the apply function can be used to compute the skewness across columns.
-
 skewValues <- apply(segData, 2, skewness)
 head(skewValues)
 str(skewValues)
@@ -62,21 +57,23 @@ hist(segData$EqEllipseOblateVolCh1)
 # Using these values as a guide, the variables can be prioritized for visualizing the distribution.  The basic R function hist or the histogram function in the lattice can be used to assess the shape of the distribution. To determine which type of transformation should be used, the MASS package contains the boxcox function. Although this function estimates λ, it does not create the transformed variable(s).
 
 # A caret function, BoxCoxTrans, can find the appropriate transformation and apply them to the new data:
-
 library(caret)
 # use histogram to review skewness
 hist(segData$AreaCh1)
 Ch1AreaTrans <- caret::BoxCoxTrans(segData$AreaCh1)
 Ch1AreaTrans
- 
 # The original data
 head(segData$AreaCh1)
-
 # After transformation
 predict(Ch1AreaTrans, head(segData$AreaCh1))
 # check with histogram if skewness has been reduced
 hist(predict(Ch1AreaTrans, segData$AreaCh1))
 (819^(-.9) - 1)/(-.9)
+
+# plot the transformed numbers, i.e. after having removed skewness
+Ch1AreaTrans_unskewed <- 
+        predict(Ch1AreaTrans, segData$AreaCh1)
+hist(Ch1AreaTrans_unskewed)
 ```
 
 Another caret function, **preProcess**, applies this transformation to a set of predictors. This function is discussed below. 
@@ -87,20 +84,20 @@ The base R function **prcomp** can be used for PCA.  In the code below, the data
 pcaObject <- stats::prcomp(segData, 
                     center = TRUE, 
                     scale. = TRUE)
-
 # review created object
-pcaObject
-
+pcaObject$sdev
+pcaObject$rotation
+pcaObject$center
+pcaObject$scale
+pcaObject$x
 # Calculate the cumulative percentage of variance which each component accounts for.
 percentVariance <- pcaObject$sd^2/sum(pcaObject$sd^2)*100
 percentVariance[1:3]
-
 # The transformed values are stored in pcaObject as a sub-object called x:
 head(pcaObject$x[, 1:5])
 ```
 
 The another sub-object called **rotation** stores the **variable loadings**, where rows correspond to predictor variables and columns are  associated with the components:
-
 ```{r}
 head(pcaObject$rotation[, 1:3])
 ```
@@ -122,17 +119,18 @@ The function calculates the required quantities for the transformation. After ca
 
 ```{r}
 trans <-
-  caret::preProcess(segData, method = c("BoxCox", "center", "scale", "pca"))
+        caret::preProcess(segData, 
+                          method = c("BoxCox", 
+                                     "center", 
+                                     "scale", 
+                                     "pca"))
 trans
 trans$dim
 trans$rotation
-
 # Apply the transformations:
 transformed <- predict(trans, segData)
-
 # These values are different than the previous PCA components since they were transformed prior to PCA
 head(transformed[, 1:5])
-transformed
 ```
 
 The **order** in which the possible transformation are applied is: 
@@ -153,24 +151,17 @@ To filter for **near-zero variance predictors**, the caret package function **ne
 
 ```{r}
 nearZeroVar(segData)
-
 # When predictors should be removed, a vector of integers is returned that indicates which columns should be removed.
-
 # Similarly, to filter on between-predictor correlations, the cor function can calculate the correlations between predictor variables:
-
 correlations <- stats::cor(segData)
 dim(correlations)
 correlations[1:4, 1:4]
 str(correlations)
 ```
 
-
 ##### corrplot()
 
-To visually examine the correlation structure of the data, the corrplot pack-
-age contains an excellent function of the same name. The function has many
-options including one that will reorder the variables in a way that reveals
-clusters of highly correlated predictors.
+To visually examine the correlation structure of the data, the corrplot package contains an excellent function of the same name. The function has many options including one that will reorder the variables in a way that reveals clusters of highly correlated predictors.
 
 ```{r}
 library(corrplot)
@@ -185,7 +176,7 @@ function returns column numbers denoting the predictors that are recommended
 for deletion:
 
 ```{r}
-highCorr <- findCorrelation(correlations, cutoff = .75)
+highCorr <- caret::findCorrelation(correlations, cutoff = .75)
 length(highCorr)
 head(highCorr)
 filteredSegData <- segData[, -..highCorr]
@@ -194,12 +185,11 @@ filteredSegData <- segData[, -..highCorr]
 
 #### Creating Dummy Variables
 
-Several methods exist for creating dummy variables based on a particular model. Section 4.9 discusses different methods for specifying how the predictors enter into the model. One approach, the formula method, allows great flexibility to create the model function. Using formulas in model functions parameterizes the predictors such that not all categories have dummy variables. This approach will be shown in greater detail for linear regression. As previously mentioned, there are occasions when a complete set of dummy variables is useful. For example, the splits in a tree-based model are more interpretable when the dummy variables encode all the information for that predictor. We recommend using the full set if dummy variables when working with tree-based models.  
+Several methods exist for creating **dummy variables** based on a particular model. Section 4.9 discusses different methods for specifying how the predictors enter into the model. One approach, the formula method, allows great flexibility to create the model function. Using formulas in model functions parameterizes the predictors such that not all categories have dummy variables. This approach will be shown in greater detail for linear regression. As previously mentioned, there are occasions when a complete set of dummy variables is useful. For example, the splits in a tree-based model are more interpretable when the dummy variables encode all the information for that predictor. We recommend using the full set if dummy variables when working with tree-based models.  
 
 Example dummyVars:
 
 ```{r}
-
 when <- data.frame(time = c("afternoon", "night", "afternoon",
                             "morning", "morning", "morning",
                             "morning", "afternoon", "afternoon"),
@@ -207,31 +197,25 @@ when <- data.frame(time = c("afternoon", "night", "afternoon",
                            "Wed", "Wed", "Fri",
                            "Sat", "Sat", "Fri"),
                            stringsAsFactors = TRUE)
-
 when
-
+str(when)
 levels(when$time) <- list(morning="morning",
                           afternoon="afternoon",
                           night="night")
 when
-
 levels(when$day) <- list(Mon="Mon", Tue="Tue", Wed="Wed", Thu="Thu",
                          Fri="Fri", Sat="Sat", Sun="Sun")
-
 ## Default behavior:
 model.matrix(~day, when)
-
-mainEffects <- dummyVars(~ day + time, data = when)
+mainEffects <- caret::dummyVars(~ day + time, data = when)
 mainEffects
 predict(mainEffects, when[1:3,])
-
 when2 <- when
 when2[1, 1] <- NA
 when2
 when2[1:3,]
 predict(mainEffects, when2[1:3,])
 predict(mainEffects, when2[1:3,], na.action = na.omit)
-
 
 interactionModel <- dummyVars(~ day + time + day:time,
                               data = when,
